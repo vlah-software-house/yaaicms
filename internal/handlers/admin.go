@@ -99,12 +99,13 @@ func NewAdmin(renderer *render.Renderer, sessions *session.Store, contentStore *
 
 // Dashboard renders the admin dashboard page with real stats.
 func (a *Admin) Dashboard(w http.ResponseWriter, r *http.Request) {
-	postCount, _ := a.contentStore.CountByType(models.ContentTypePost)
-	pageCount, _ := a.contentStore.CountByType(models.ContentTypePage)
-	users, _ := a.userStore.List()
+	sess := middleware.SessionFromCtx(r.Context())
+	postCount, _ := a.contentStore.CountByType(sess.TenantID, models.ContentTypePost)
+	pageCount, _ := a.contentStore.CountByType(sess.TenantID, models.ContentTypePage)
+	users, _ := a.userStore.ListByTenant(sess.TenantID)
 	var mediaCount int
 	if a.mediaStore != nil {
-		mediaCount, _ = a.mediaStore.Count()
+		mediaCount, _ = a.mediaStore.Count(sess.TenantID)
 	}
 
 	a.renderer.Page(w, r, "dashboard", &render.PageData{
@@ -123,7 +124,8 @@ func (a *Admin) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 // PostsList renders the posts management page.
 func (a *Admin) PostsList(w http.ResponseWriter, r *http.Request) {
-	posts, err := a.contentStore.ListByType(models.ContentTypePost)
+	sess := middleware.SessionFromCtx(r.Context())
+	posts, err := a.contentStore.ListByType(sess.TenantID, models.ContentTypePost)
 	if err != nil {
 		slog.Error("list posts failed", "error", err)
 	}
@@ -137,7 +139,8 @@ func (a *Admin) PostsList(w http.ResponseWriter, r *http.Request) {
 
 // PostNew renders the new post form.
 func (a *Admin) PostNew(w http.ResponseWriter, r *http.Request) {
-	categories, _ := a.categoryStore.FlatTree()
+	sess := middleware.SessionFromCtx(r.Context())
+	categories, _ := a.categoryStore.FlatTree(sess.TenantID)
 	a.renderer.Page(w, r, "content_form", &render.PageData{
 		Title:   "New Post",
 		Section: "posts",
@@ -174,7 +177,8 @@ func (a *Admin) PostDelete(w http.ResponseWriter, r *http.Request) {
 
 // PagesList renders the pages management page.
 func (a *Admin) PagesList(w http.ResponseWriter, r *http.Request) {
-	pages, err := a.contentStore.ListByType(models.ContentTypePage)
+	sess := middleware.SessionFromCtx(r.Context())
+	pages, err := a.contentStore.ListByType(sess.TenantID, models.ContentTypePage)
 	if err != nil {
 		slog.Error("list pages failed", "error", err)
 	}
@@ -305,7 +309,7 @@ func (a *Admin) createContent(w http.ResponseWriter, r *http.Request, contentTyp
 		c.CategoryID = &catID
 	}
 
-	created, err := a.contentStore.Create(c)
+	created, err := a.contentStore.Create(sess.TenantID, c)
 	if err != nil {
 		slog.Error("create content failed", "error", err, "type", contentType)
 		section := "posts"
@@ -326,7 +330,7 @@ func (a *Admin) createContent(w http.ResponseWriter, r *http.Request, contentTyp
 	}
 
 	// Invalidate cache for the new content (homepage may show it in listings).
-	a.invalidateContentCache(r.Context(), created.ID, created.Slug, "create")
+	a.invalidateContentCache(r.Context(), sess.TenantID, created.ID, created.Slug, "create")
 
 	if contentType == models.ContentTypePage {
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -385,7 +389,8 @@ func (a *Admin) editContent(w http.ResponseWriter, r *http.Request, section stri
 
 	// Load categories for the category selector (posts only).
 	if contentType == "post" {
-		categories, _ := a.categoryStore.FlatTree()
+		sess := middleware.SessionFromCtx(r.Context())
+		categories, _ := a.categoryStore.FlatTree(sess.TenantID)
 		data["Categories"] = categories
 	}
 
@@ -552,7 +557,7 @@ func (a *Admin) updateContent(w http.ResponseWriter, r *http.Request, section st
 		go a.generateRevisionMeta(created.ID, rev, item, revisionMessage)
 	}
 
-	a.invalidateContentCache(r.Context(), item.ID, item.Slug, "update")
+	a.invalidateContentCache(r.Context(), sess.TenantID, item.ID, item.Slug, "update")
 	http.Redirect(w, r, "/admin/"+section, http.StatusSeeOther)
 }
 
@@ -702,7 +707,7 @@ func (a *Admin) RevisionRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.invalidateContentCache(r.Context(), item.ID, item.Slug, "restore")
+	a.invalidateContentCache(r.Context(), sess.TenantID, item.ID, item.Slug, "restore")
 
 	// Determine section for redirect.
 	section := "posts"
@@ -777,6 +782,7 @@ func truncateStr(s string, maxLen int) string {
 
 // deleteContent handles content deletion.
 func (a *Admin) deleteContent(w http.ResponseWriter, r *http.Request, section string) {
+	sess := middleware.SessionFromCtx(r.Context())
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -790,7 +796,7 @@ func (a *Admin) deleteContent(w http.ResponseWriter, r *http.Request, section st
 	if err := a.contentStore.Delete(id); err != nil {
 		slog.Error("delete content failed", "error", err)
 	} else if item != nil {
-		a.invalidateContentCache(r.Context(), id, item.Slug, "delete")
+		a.invalidateContentCache(r.Context(), sess.TenantID, id, item.Slug, "delete")
 	}
 
 	http.Redirect(w, r, "/admin/"+section, http.StatusSeeOther)
@@ -800,7 +806,8 @@ func (a *Admin) deleteContent(w http.ResponseWriter, r *http.Request, section st
 
 // TemplatesList renders the templates management page with real data.
 func (a *Admin) TemplatesList(w http.ResponseWriter, r *http.Request) {
-	templates, err := a.templateStore.List()
+	sess := middleware.SessionFromCtx(r.Context())
+	templates, err := a.templateStore.List(sess.TenantID)
 	if err != nil {
 		slog.Error("list templates failed", "error", err)
 	}
@@ -861,7 +868,8 @@ func (a *Admin) TemplateCreate(w http.ResponseWriter, r *http.Request) {
 		HTMLContent: htmlContent,
 	}
 
-	created, err := a.templateStore.Create(t)
+	sess := middleware.SessionFromCtx(r.Context())
+	created, err := a.templateStore.Create(sess.TenantID, t)
 	if err != nil {
 		slog.Error("create template failed", "error", err)
 		a.renderer.Page(w, r, "template_form", &render.PageData{
@@ -877,7 +885,7 @@ func (a *Admin) TemplateCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// New templates aren't active yet, but log the event for auditing.
-	a.cacheLog.Log("template", created.ID, "create")
+	a.cacheLog.Log(sess.TenantID, "template", created.ID, "create")
 	http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
 }
 
@@ -978,7 +986,7 @@ func (a *Admin) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 		slog.Error("update template failed", "error", err)
 	} else {
 		// Template content changed — invalidate L1 (compiled) and L2 (rendered pages).
-		a.invalidateTemplateCache(r.Context(), item.ID, "update")
+		a.invalidateTemplateCache(r.Context(), sess.TenantID, item.ID, "update")
 	}
 
 	http.Redirect(w, r, "/admin/templates/"+item.ID.String(), http.StatusSeeOther)
@@ -986,6 +994,7 @@ func (a *Admin) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 
 // TemplateActivate sets a template as active for its type.
 func (a *Admin) TemplateActivate(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -993,11 +1002,11 @@ func (a *Admin) TemplateActivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.templateStore.Activate(id); err != nil {
+	if err := a.templateStore.Activate(sess.TenantID, id); err != nil {
 		slog.Error("activate template failed", "error", err)
 	} else {
 		// Activation changes which template renders for a type — clear everything.
-		a.invalidateAllTemplateCache(r.Context(), id, "update")
+		a.invalidateAllTemplateCache(r.Context(), sess.TenantID, id, "update")
 	}
 
 	http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
@@ -1005,6 +1014,7 @@ func (a *Admin) TemplateActivate(w http.ResponseWriter, r *http.Request) {
 
 // TemplateDelete handles template deletion.
 func (a *Admin) TemplateDelete(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -1015,7 +1025,7 @@ func (a *Admin) TemplateDelete(w http.ResponseWriter, r *http.Request) {
 	if err := a.templateStore.Delete(id); err != nil {
 		slog.Error("delete template failed", "error", err)
 	} else {
-		a.invalidateTemplateCache(r.Context(), id, "delete")
+		a.invalidateTemplateCache(r.Context(), sess.TenantID, id, "delete")
 	}
 
 	http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
@@ -1025,6 +1035,8 @@ func (a *Admin) TemplateDelete(w http.ResponseWriter, r *http.Request) {
 // "template_type" (page, article_loop, header, footer) and "content_id" params
 // to render with type-appropriate structure and real content data.
 func (a *Admin) TemplatePreview(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+
 	htmlContent := r.FormValue("html_content")
 	if htmlContent == "" {
 		http.Error(w, "No template content", http.StatusBadRequest)
@@ -1041,7 +1053,7 @@ func (a *Admin) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 		if tmplType == "" {
 			tmplType = "page"
 		}
-		data = a.buildRealPreviewData(tmplType, contentID)
+		data = a.buildRealPreviewData(sess.TenantID, tmplType, contentID)
 	}
 	if data == nil {
 		if tmplType != "" {
@@ -1109,7 +1121,7 @@ func (a *Admin) TemplateRevisionRestore(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	a.invalidateTemplateCache(r.Context(), item.ID, "restore")
+	a.invalidateTemplateCache(r.Context(), sess.TenantID, item.ID, "restore")
 
 	redirectURL := fmt.Sprintf("/admin/templates/%s", item.ID)
 	if r.Header.Get("HX-Request") == "true" {
@@ -1216,7 +1228,8 @@ Be concise and factual. Output ONLY the bullet points, nothing else.`
 
 // UsersList renders the user management page with real data.
 func (a *Admin) UsersList(w http.ResponseWriter, r *http.Request) {
-	users, err := a.userStore.List()
+	sess := middleware.SessionFromCtx(r.Context())
+	users, err := a.userStore.ListByTenant(sess.TenantID)
 	if err != nil {
 		slog.Error("list users failed", "error", err)
 	}
@@ -1314,7 +1327,10 @@ func (a *Admin) UserCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := a.userStore.Create(email, password, displayName, role); err != nil {
+	sess := middleware.SessionFromCtx(r.Context())
+
+	user, err := a.userStore.Create(email, password, displayName)
+	if err != nil {
 		slog.Error("create user failed", "error", err)
 		a.renderer.Page(w, r, "user_form", &render.PageData{
 			Title:   "New User",
@@ -1329,7 +1345,10 @@ func (a *Admin) UserCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := middleware.SessionFromCtx(r.Context())
+	if err := a.userStore.AddToTenant(user.ID, sess.TenantID, role); err != nil {
+		slog.Error("add user to tenant failed", "error", err, "user_id", user.ID, "tenant_id", sess.TenantID)
+	}
+
 	slog.Info("user created", "admin", sess.Email, "new_user", email, "role", role)
 
 	if r.Header.Get("HX-Request") == "true" {
@@ -1345,31 +1364,32 @@ func (a *Admin) UserCreate(w http.ResponseWriter, r *http.Request) {
 // invalidateContentCache purges the L2 page cache for a content item and
 // logs the event. Always invalidates the homepage too since post listings
 // or the "home" page might have changed.
-func (a *Admin) invalidateContentCache(ctx context.Context, contentID uuid.UUID, contentSlug, action string) {
-	a.pageCache.InvalidatePage(ctx, cache.SlugKey(contentSlug))
+func (a *Admin) invalidateContentCache(ctx context.Context, tenantID uuid.UUID, contentID uuid.UUID, contentSlug, action string) {
+	a.pageCache.InvalidatePage(ctx, cache.SlugKey(tenantID.String(), contentSlug))
 	a.pageCache.InvalidateHomepage(ctx)
-	a.cacheLog.Log("content", contentID, action)
+	a.cacheLog.Log(tenantID, "content", contentID, action)
 }
 
 // invalidateTemplateCache purges both L1 (compiled template) and L2 (all
 // rendered pages) caches, since any template change can affect any page.
-func (a *Admin) invalidateTemplateCache(ctx context.Context, templateID uuid.UUID, action string) {
+func (a *Admin) invalidateTemplateCache(ctx context.Context, tenantID uuid.UUID, templateID uuid.UUID, action string) {
 	a.engine.InvalidateTemplate(templateID.String())
 	a.pageCache.InvalidateAll(ctx)
-	a.cacheLog.Log("template", templateID, action)
+	a.cacheLog.Log(tenantID, "template", templateID, action)
 }
 
 // invalidateAllTemplateCache clears the entire L1 cache and all L2 pages.
 // Used for template activation which changes the active template for a type.
-func (a *Admin) invalidateAllTemplateCache(ctx context.Context, templateID uuid.UUID, action string) {
+func (a *Admin) invalidateAllTemplateCache(ctx context.Context, tenantID uuid.UUID, templateID uuid.UUID, action string) {
 	a.engine.InvalidateAllTemplates()
 	a.pageCache.InvalidateAll(ctx)
-	a.cacheLog.Log("template", templateID, action)
+	a.cacheLog.Log(tenantID, "template", templateID, action)
 }
 
 // SettingsPage renders the settings page with site configuration and AI provider info.
 func (a *Admin) SettingsPage(w http.ResponseWriter, r *http.Request) {
-	settings, err := a.siteSettingStore.All()
+	sess := middleware.SessionFromCtx(r.Context())
+	settings, err := a.siteSettingStore.All(sess.TenantID)
 	if err != nil {
 		slog.Error("failed to load site settings", "error", err)
 		settings = make(models.SiteSettings)
@@ -1401,7 +1421,8 @@ func (a *Admin) SettingsSave(w http.ResponseWriter, r *http.Request) {
 		"posts_per_page": r.FormValue("posts_per_page"),
 	}
 
-	if err := a.siteSettingStore.SetMany(updates); err != nil {
+	sess := middleware.SessionFromCtx(r.Context())
+	if err := a.siteSettingStore.SetMany(sess.TenantID, updates); err != nil {
 		slog.Error("failed to save site settings", "error", err)
 		http.Error(w, "failed to save settings", http.StatusInternalServerError)
 		return
@@ -1431,7 +1452,8 @@ func (a *Admin) HelpPage(w http.ResponseWriter, r *http.Request) {
 
 // CategoriesList renders the category manager page.
 func (a *Admin) CategoriesList(w http.ResponseWriter, r *http.Request) {
-	tree, err := a.categoryStore.Tree()
+	sess := middleware.SessionFromCtx(r.Context())
+	tree, err := a.categoryStore.Tree(sess.TenantID)
 	if err != nil {
 		slog.Error("list categories failed", "error", err)
 	}
@@ -1445,6 +1467,7 @@ func (a *Admin) CategoriesList(w http.ResponseWriter, r *http.Request) {
 
 // CategoryCreate handles creating a new category.
 func (a *Admin) CategoryCreate(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
 	name := strings.TrimSpace(r.FormValue("name"))
 	catSlug := strings.TrimSpace(r.FormValue("slug"))
 	description := strings.TrimSpace(r.FormValue("description"))
@@ -1469,10 +1492,10 @@ func (a *Admin) CategoryCreate(w http.ResponseWriter, r *http.Request) {
 		cat.ParentID = &pid
 	}
 
-	nextOrder, _ := a.categoryStore.NextSortOrder(cat.ParentID)
+	nextOrder, _ := a.categoryStore.NextSortOrder(sess.TenantID, cat.ParentID)
 	cat.SortOrder = nextOrder
 
-	if _, err := a.categoryStore.Create(cat); err != nil {
+	if _, err := a.categoryStore.Create(sess.TenantID, cat); err != nil {
 		slog.Error("create category failed", "error", err)
 		http.Error(w, "Failed to create category. Slug may already exist.", http.StatusConflict)
 		return

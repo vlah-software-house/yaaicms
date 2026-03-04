@@ -15,8 +15,9 @@ func TestCacheLogStoreLog(t *testing.T) {
 	s := NewCacheLogStore(db)
 
 	// Log should not error (best-effort).
+	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	entityID := uuid.New()
-	s.Log("content", entityID, "update")
+	s.Log(tenantID, "content", entityID, "update")
 
 	// Clean up.
 	t.Cleanup(func() {
@@ -41,16 +42,17 @@ func TestCacheLogStoreRecentEntries(t *testing.T) {
 	s := NewCacheLogStore(db)
 
 	// Insert a few log entries.
+	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	id1 := uuid.New()
 	id2 := uuid.New()
-	s.Log("content", id1, "create")
-	s.Log("template", id2, "delete")
+	s.Log(tenantID, "content", id1, "create")
+	s.Log(tenantID, "template", id2, "delete")
 
 	t.Cleanup(func() {
 		db.Exec("DELETE FROM cache_invalidation_log WHERE entity_id IN ($1, $2)", id1, id2)
 	})
 
-	entries, err := s.RecentEntries(10)
+	entries, err := s.RecentEntries(tenantID, 10)
 	if err != nil {
 		t.Fatalf("RecentEntries: %v", err)
 	}

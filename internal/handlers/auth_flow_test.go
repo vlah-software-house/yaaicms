@@ -276,7 +276,7 @@ func TestTwoFASetupPage_WithSession(t *testing.T) {
 		t.Fatalf("reset totp: %v", err)
 	}
 
-	sess := testSession(user.ID, user.Email, string(user.Role), false)
+	sess := testSession(user.ID, user.Email, "admin", false)
 	req := httptest.NewRequest(http.MethodGet, "/admin/2fa/setup", nil)
 	req = req.WithContext(ctxWithSession(req.Context(), sess))
 	rec := httptest.NewRecorder()
@@ -315,7 +315,7 @@ func TestTwoFASetupPage_AlreadyEnabled(t *testing.T) {
 		env.UserStore.ResetTOTP(user.ID)
 	})
 
-	sess := testSession(user.ID, user.Email, string(user.Role), false)
+	sess := testSession(user.ID, user.Email, "admin", false)
 	req := httptest.NewRequest(http.MethodGet, "/admin/2fa/setup", nil)
 	req = req.WithContext(ctxWithSession(req.Context(), sess))
 	rec := httptest.NewRecorder()
@@ -423,7 +423,7 @@ func TestTwoFAVerifySubmit_InvalidCode(t *testing.T) {
 		env.UserStore.ResetTOTP(user.ID)
 	})
 
-	sess := testSession(user.ID, user.Email, string(user.Role), false)
+	sess := testSession(user.ID, user.Email, "admin", false)
 
 	form := url.Values{}
 	form.Set("code", "000000") // Almost certainly wrong.
@@ -459,7 +459,7 @@ func TestTwoFAVerifySubmit_NoTOTPSecret(t *testing.T) {
 		t.Fatalf("reset totp: %v", err)
 	}
 
-	sess := testSession(user.ID, user.Email, string(user.Role), false)
+	sess := testSession(user.ID, user.Email, "admin", false)
 
 	form := url.Values{}
 	form.Set("code", "123456")
@@ -499,10 +499,11 @@ func TestLogout_RedirectsToLogin(t *testing.T) {
 	createRec := httptest.NewRecorder()
 	ctx := context.Background()
 	sessID, err := env.Sessions.Create(ctx, createRec, &session.Data{
-		UserID:    user.ID,
-		Email:     user.Email,
-		Role:      string(user.Role),
-		TwoFADone: true,
+		UserID:       user.ID,
+		Email:        user.Email,
+		IsSuperAdmin: user.IsSuperAdmin,
+		TenantRole:   "admin",
+		TwoFADone:    true,
 	})
 	if err != nil {
 		t.Fatalf("create session: %v", err)
@@ -517,7 +518,7 @@ func TestLogout_RedirectsToLogin(t *testing.T) {
 		req.AddCookie(c)
 	}
 	// Add session data to context as the middleware would.
-	sess := testSession(user.ID, user.Email, string(user.Role), true)
+	sess := testSession(user.ID, user.Email, "admin", true)
 	req = req.WithContext(ctxWithSession(req.Context(), sess))
 
 	rec := httptest.NewRecorder()

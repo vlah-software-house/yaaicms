@@ -188,7 +188,7 @@ func (a *Admin) AIGenerateImage(w http.ResponseWriter, r *http.Request) {
 		UploaderID:   sess.UserID,
 	}
 
-	created, err := a.mediaStore.Create(media)
+	created, err := a.mediaStore.Create(sess.TenantID, media)
 	if err != nil {
 		slog.Error("ai image media insert failed", "error", err)
 		writeAIError(w, "Failed to save image metadata.")
@@ -823,6 +823,8 @@ type templateSaveResponse struct {
 // optional current HTML for iterative refinement. Returns JSON with the
 // generated HTML, validation status, and a rendered preview.
 func (a *Admin) AITemplateGenerate(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+
 	prompt := r.FormValue("prompt")
 	tmplType := r.FormValue("template_type")
 	chatHistory := r.FormValue("chat_history")
@@ -848,7 +850,7 @@ func (a *Admin) AITemplateGenerate(w http.ResponseWriter, r *http.Request) {
 
 	// Build the system prompt with type-specific variable documentation and
 	// the active design brief (if any) for visual consistency.
-	designBrief := a.getActiveDesignBrief()
+	designBrief := a.getActiveDesignBrief(sess.TenantID)
 	systemPrompt := buildTemplateSystemPrompt(tmplType, designBrief)
 
 	// Build the user prompt with context.
@@ -896,7 +898,7 @@ func (a *Admin) AITemplateGenerate(w http.ResponseWriter, r *http.Request) {
 		contentID := r.FormValue("content_id")
 		var previewData any
 		if contentID != "" {
-			previewData = a.buildRealPreviewData(tmplType, contentID)
+			previewData = a.buildRealPreviewData(sess.TenantID, tmplType, contentID)
 		}
 		if previewData == nil {
 			previewData = buildPreviewData(tmplType)
@@ -925,6 +927,8 @@ func (a *Admin) AITemplateGenerate(w http.ResponseWriter, r *http.Request) {
 // AITemplateSave saves a generated template to the database.
 // Validates the template before saving and triggers cache invalidation.
 func (a *Admin) AITemplateSave(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+
 	name := r.FormValue("name")
 	tmplType := models.TemplateType(r.FormValue("type"))
 	htmlContent := r.FormValue("html_content")
@@ -946,14 +950,14 @@ func (a *Admin) AITemplateSave(w http.ResponseWriter, r *http.Request) {
 		HTMLContent: htmlContent,
 	}
 
-	created, err := a.templateStore.Create(t)
+	created, err := a.templateStore.Create(sess.TenantID, t)
 	if err != nil {
 		slog.Error("ai save template failed", "error", err)
 		writeJSON(w, http.StatusOK, templateSaveResponse{Error: "Failed to save template."})
 		return
 	}
 
-	a.cacheLog.Log("template", created.ID, "create")
+	a.cacheLog.Log(sess.TenantID, "template", created.ID, "create")
 	writeJSON(w, http.StatusOK, templateSaveResponse{ID: created.ID.String()})
 }
 
@@ -969,7 +973,9 @@ type themeResponse struct {
 
 // AIThemeList returns all design themes as JSON.
 func (a *Admin) AIThemeList(w http.ResponseWriter, r *http.Request) {
-	themes, err := a.themeStore.List()
+	sess := middleware.SessionFromCtx(r.Context())
+
+	themes, err := a.themeStore.List(sess.TenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to list themes."})
 		return
@@ -989,6 +995,8 @@ func (a *Admin) AIThemeList(w http.ResponseWriter, r *http.Request) {
 
 // AIThemeCreate creates a new design theme.
 func (a *Admin) AIThemeCreate(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+
 	name := strings.TrimSpace(r.FormValue("name"))
 	stylePrompt := strings.TrimSpace(r.FormValue("style_prompt"))
 
@@ -998,7 +1006,7 @@ func (a *Admin) AIThemeCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	theme := &models.DesignTheme{Name: name, StylePrompt: stylePrompt}
-	created, err := a.themeStore.Create(theme)
+	created, err := a.themeStore.Create(sess.TenantID, theme)
 	if err != nil {
 		slog.Error("create design theme failed", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create theme."})
@@ -1040,6 +1048,8 @@ func (a *Admin) AIThemeUpdate(w http.ResponseWriter, r *http.Request) {
 
 // AIThemeActivate sets a theme as the active design brief.
 func (a *Admin) AIThemeActivate(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -1047,7 +1057,7 @@ func (a *Admin) AIThemeActivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.themeStore.Activate(id); err != nil {
+	if err := a.themeStore.Activate(sess.TenantID, id); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to activate theme."})
 		return
 	}
@@ -1091,7 +1101,9 @@ func (a *Admin) AIThemeDelete(w http.ResponseWriter, r *http.Request) {
 
 // AIActiveTheme returns the currently active design theme (or null).
 func (a *Admin) AIActiveTheme(w http.ResponseWriter, r *http.Request) {
-	theme, err := a.themeStore.FindActive()
+	sess := middleware.SessionFromCtx(r.Context())
+
+	theme, err := a.themeStore.FindActive(sess.TenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch active theme."})
 		return
@@ -1110,8 +1122,8 @@ func (a *Admin) AIActiveTheme(w http.ResponseWriter, r *http.Request) {
 
 // getActiveDesignBrief fetches the active theme's style prompt, returning
 // an empty string if no theme is active or the lookup fails.
-func (a *Admin) getActiveDesignBrief() string {
-	theme, err := a.themeStore.FindActive()
+func (a *Admin) getActiveDesignBrief(tenantID uuid.UUID) string {
+	theme, err := a.themeStore.FindActive(tenantID)
 	if err != nil || theme == nil {
 		return ""
 	}
@@ -1140,6 +1152,8 @@ type restylePreviewResponse struct {
 // It compiles the header and footer templates, renders them, then injects
 // their output into the page and article_loop templates for a unified view.
 func (a *Admin) AIRestylePreview(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+
 	var req restylePreviewRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, restylePreviewResponse{Error: "Invalid request."})
@@ -1174,7 +1188,7 @@ func (a *Admin) AIRestylePreview(w http.ResponseWriter, r *http.Request) {
 	if req.PageHTML != "" {
 		var pageData any
 		if req.ContentID != "" {
-			pageData = a.buildRealPreviewData("page", req.ContentID)
+			pageData = a.buildRealPreviewData(sess.TenantID, "page", req.ContentID)
 		}
 		if pageData == nil {
 			pageData = buildPreviewData("page")
@@ -1200,7 +1214,7 @@ func (a *Admin) AIRestylePreview(w http.ResponseWriter, r *http.Request) {
 	// Render article loop preview with the generated header/footer.
 	if req.ArticleLoopHTML != "" {
 		var loopData any
-		loopData = a.buildRealPreviewData("article_loop", "")
+		loopData = a.buildRealPreviewData(sess.TenantID, "article_loop", "")
 		if loopData == nil {
 			loopData = buildPreviewData("article_loop")
 		}
@@ -1239,10 +1253,12 @@ type previewContentItem struct {
 // AIPreviewContentList returns a JSON list of available content items
 // (posts and pages) that can be used for real-data template previews.
 func (a *Admin) AIPreviewContentList(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+
 	var items []previewContentItem
 
 	// Fetch published posts.
-	posts, err := a.contentStore.ListPublishedByType(models.ContentTypePost)
+	posts, err := a.contentStore.ListPublishedByType(sess.TenantID, models.ContentTypePost)
 	if err != nil {
 		slog.Warn("preview content list: failed to list posts", "error", err)
 	}
@@ -1256,7 +1272,7 @@ func (a *Admin) AIPreviewContentList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch published pages.
-	pages, err := a.contentStore.ListPublishedByType(models.ContentTypePage)
+	pages, err := a.contentStore.ListPublishedByType(sess.TenantID, models.ContentTypePage)
 	if err != nil {
 		slog.Warn("preview content list: failed to list pages", "error", err)
 	}
@@ -1270,7 +1286,7 @@ func (a *Admin) AIPreviewContentList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Also include draft content — useful for previewing unpublished work.
-	drafts, err := a.contentStore.ListByType(models.ContentTypePost)
+	drafts, err := a.contentStore.ListByType(sess.TenantID, models.ContentTypePost)
 	if err == nil {
 		for _, d := range drafts {
 			if d.Status == models.ContentStatusDraft {
@@ -1283,7 +1299,7 @@ func (a *Admin) AIPreviewContentList(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	draftPages, err := a.contentStore.ListByType(models.ContentTypePage)
+	draftPages, err := a.contentStore.ListByType(sess.TenantID, models.ContentTypePage)
 	if err == nil {
 		for _, d := range draftPages {
 			if d.Status == models.ContentStatusDraft {
@@ -1305,12 +1321,12 @@ func (a *Admin) AIPreviewContentList(w http.ResponseWriter, r *http.Request) {
 // For "page" templates, it fetches a specific content item by ID.
 // For "article_loop" templates, it fetches all published posts.
 // Returns nil if the content cannot be found or an error occurs.
-func (a *Admin) buildRealPreviewData(tmplType string, contentID string) any {
+func (a *Admin) buildRealPreviewData(tenantID uuid.UUID, tmplType string, contentID string) any {
 	switch tmplType {
 	case "page":
 		return a.buildRealPagePreview(contentID)
 	case "article_loop":
-		return a.buildRealArticleLoopPreview()
+		return a.buildRealArticleLoopPreview(tenantID)
 	default:
 		// Header/footer don't use content data.
 		return buildPreviewData(tmplType)
@@ -1391,8 +1407,8 @@ func (a *Admin) buildRealPagePreview(contentID string) any {
 
 // buildRealArticleLoopPreview fetches published posts and their featured
 // images, then assembles ListData for article_loop template preview.
-func (a *Admin) buildRealArticleLoopPreview() any {
-	posts, err := a.contentStore.ListPublishedByType(models.ContentTypePost)
+func (a *Admin) buildRealArticleLoopPreview(tenantID uuid.UUID) any {
+	posts, err := a.contentStore.ListPublishedByType(tenantID, models.ContentTypePost)
 	if err != nil || len(posts) == 0 {
 		return nil
 	}

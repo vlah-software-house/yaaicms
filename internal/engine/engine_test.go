@@ -523,7 +523,7 @@ func TestRenderPageAndPostListRequireStore(t *testing.T) {
 
 		// This will panic because renderFragment calls e.templateStore.FindActiveByType
 		// on a nil pointer.
-		_, _ = eng.RenderPage(nil, nil)
+		_, _ = eng.RenderPage(testTenantID, testSiteName, nil, nil)
 		t.Log("RenderPage with nil store requires integration tests with a database")
 	})
 
@@ -534,7 +534,7 @@ func TestRenderPageAndPostListRequireStore(t *testing.T) {
 			}
 		}()
 
-		_, _ = eng.RenderPostList(nil, nil)
+		_, _ = eng.RenderPostList(testTenantID, testSiteName, nil, nil)
 		t.Log("RenderPostList with nil store requires integration tests with a database")
 	})
 }
@@ -682,11 +682,17 @@ func cleanContent(t *testing.T, db *sql.DB, slugs ...string) {
 	}
 }
 
+// testTenantID is a fixed tenant ID used across engine integration tests.
+var testTenantID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
+// testSiteName is a fixed site name used across engine integration tests.
+const testSiteName = "Test Site"
+
 // createAndActivateTemplate is a helper that inserts a template and activates it.
 // It returns the created template model.
 func createAndActivateTemplate(t *testing.T, ts *store.TemplateStore, name string, tmplType models.TemplateType, html string) *models.Template {
 	t.Helper()
-	created, err := ts.Create(&models.Template{
+	created, err := ts.Create(testTenantID, &models.Template{
 		Name:        name,
 		Type:        tmplType,
 		HTMLContent: html,
@@ -694,7 +700,7 @@ func createAndActivateTemplate(t *testing.T, ts *store.TemplateStore, name strin
 	if err != nil {
 		t.Fatalf("create template %q: %v", name, err)
 	}
-	if err := ts.Activate(created.ID); err != nil {
+	if err := ts.Activate(testTenantID, created.ID); err != nil {
 		t.Fatalf("activate template %q: %v", name, err)
 	}
 	return created
@@ -739,7 +745,7 @@ func TestRenderPageIntegration(t *testing.T) {
 	metaDesc := "Test meta description"
 	metaKw := "test,integration"
 	now := time.Now()
-	content, err := cs.Create(&models.Content{
+	content, err := cs.Create(testTenantID, &models.Content{
 		Type:            models.ContentTypePost,
 		Title:           "Integration Test Page",
 		Slug:            slug,
@@ -757,7 +763,7 @@ func TestRenderPageIntegration(t *testing.T) {
 
 	eng := New(ts)
 
-	result, err := eng.RenderPage(content, nil)
+	result, err := eng.RenderPage(testTenantID, testSiteName, content, nil)
 	if err != nil {
 		t.Fatalf("RenderPage: %v", err)
 	}
@@ -839,7 +845,7 @@ func TestRenderPageNilOptionalFields(t *testing.T) {
 
 	cs := store.NewContentStore(db)
 	// Create content with nil optional fields and nil PublishedAt.
-	content, err := cs.Create(&models.Content{
+	content, err := cs.Create(testTenantID, &models.Content{
 		Type:     models.ContentTypePage,
 		Title:    "Nil Fields Page",
 		Slug:     slug,
@@ -854,7 +860,7 @@ func TestRenderPageNilOptionalFields(t *testing.T) {
 
 	eng := New(ts)
 
-	result, err := eng.RenderPage(content, nil)
+	result, err := eng.RenderPage(testTenantID, testSiteName, content, nil)
 	if err != nil {
 		t.Fatalf("RenderPage with nil optional fields: %v", err)
 	}
@@ -911,7 +917,7 @@ func TestRenderPostListIntegration(t *testing.T) {
 	excerpt1 := "First post excerpt"
 	excerpt2 := "Second post excerpt"
 
-	post1, err := cs.Create(&models.Content{
+	post1, err := cs.Create(testTenantID, &models.Content{
 		Type: models.ContentTypePost, Title: "First Post", Slug: slug1,
 		Body: "<p>First</p>", Excerpt: &excerpt1,
 		Status: models.ContentStatusPublished, AuthorID: authorID, PublishedAt: &now,
@@ -920,7 +926,7 @@ func TestRenderPostListIntegration(t *testing.T) {
 		t.Fatalf("create post1: %v", err)
 	}
 
-	post2, err := cs.Create(&models.Content{
+	post2, err := cs.Create(testTenantID, &models.Content{
 		Type: models.ContentTypePost, Title: "Second Post", Slug: slug2,
 		Body: "<p>Second</p>", Excerpt: &excerpt2,
 		Status: models.ContentStatusPublished, AuthorID: authorID, PublishedAt: &now,
@@ -932,7 +938,7 @@ func TestRenderPostListIntegration(t *testing.T) {
 	// Third post has nil excerpt and nil PublishedAt (draft-like content but
 	// still passed to the list — the engine does not filter, it renders what
 	// it receives).
-	post3, err := cs.Create(&models.Content{
+	post3, err := cs.Create(testTenantID, &models.Content{
 		Type: models.ContentTypePost, Title: "Third Post", Slug: slug3,
 		Body: "<p>Third</p>", Status: models.ContentStatusDraft, AuthorID: authorID,
 	})
@@ -943,7 +949,7 @@ func TestRenderPostListIntegration(t *testing.T) {
 	eng := New(ts)
 
 	posts := []models.Content{*post1, *post2, *post3}
-	result, err := eng.RenderPostList(posts, nil)
+	result, err := eng.RenderPostList(testTenantID, testSiteName, posts, nil)
 	if err != nil {
 		t.Fatalf("RenderPostList: %v", err)
 	}
@@ -1028,7 +1034,7 @@ func TestRenderPostListEmpty(t *testing.T) {
 
 	eng := New(ts)
 
-	result, err := eng.RenderPostList([]models.Content{}, nil)
+	result, err := eng.RenderPostList(testTenantID, testSiteName, []models.Content{}, nil)
 	if err != nil {
 		t.Fatalf("RenderPostList with empty slice: %v", err)
 	}
@@ -1090,7 +1096,7 @@ func TestRenderPageNoActivePageTemplate(t *testing.T) {
 		Body:  "<p>No template</p>",
 	}
 
-	_, err = eng.RenderPage(content, nil)
+	_, err = eng.RenderPage(testTenantID, testSiteName, content, nil)
 	if err == nil {
 		t.Fatal("expected error when no active page template exists, got nil")
 	}
@@ -1134,7 +1140,7 @@ func TestRenderPostListNoActiveLoopTemplate(t *testing.T) {
 
 	eng := New(ts)
 
-	_, err = eng.RenderPostList([]models.Content{}, nil)
+	_, err = eng.RenderPostList(testTenantID, testSiteName, []models.Content{}, nil)
 	if err == nil {
 		t.Fatal("expected error when no active article_loop template exists, got nil")
 	}
@@ -1177,7 +1183,7 @@ func TestRenderPageHeaderFooterFragments(t *testing.T) {
 
 	cs := store.NewContentStore(db)
 	now := time.Now()
-	content, err := cs.Create(&models.Content{
+	content, err := cs.Create(testTenantID, &models.Content{
 		Type: models.ContentTypePost, Title: "Fragment Test", Slug: slug,
 		Body: "<p>content</p>", Status: models.ContentStatusPublished,
 		AuthorID: authorID, PublishedAt: &now,
@@ -1188,7 +1194,7 @@ func TestRenderPageHeaderFooterFragments(t *testing.T) {
 
 	eng := New(ts)
 
-	result, err := eng.RenderPage(content, nil)
+	result, err := eng.RenderPage(testTenantID, testSiteName, content, nil)
 	if err != nil {
 		t.Fatalf("RenderPage: %v", err)
 	}
@@ -1266,7 +1272,7 @@ func TestRenderPageWithoutHeaderFooter(t *testing.T) {
 
 	cs := store.NewContentStore(db)
 	now := time.Now()
-	content, err := cs.Create(&models.Content{
+	content, err := cs.Create(testTenantID, &models.Content{
 		Type: models.ContentTypePost, Title: "No HF Page", Slug: slug,
 		Body: "<p>body</p>", Status: models.ContentStatusPublished,
 		AuthorID: authorID, PublishedAt: &now,
@@ -1278,7 +1284,7 @@ func TestRenderPageWithoutHeaderFooter(t *testing.T) {
 	eng := New(ts)
 
 	// RenderPage should NOT error even when header/footer templates are missing.
-	result, err := eng.RenderPage(content, nil)
+	result, err := eng.RenderPage(testTenantID, testSiteName, content, nil)
 	if err != nil {
 		t.Fatalf("RenderPage without header/footer should succeed, got: %v", err)
 	}
@@ -1325,7 +1331,7 @@ func TestRenderPageCachesTemplates(t *testing.T) {
 
 	cs := store.NewContentStore(db)
 	now := time.Now()
-	content, err := cs.Create(&models.Content{
+	content, err := cs.Create(testTenantID, &models.Content{
 		Type: models.ContentTypePost, Title: "Cache Test", Slug: slug,
 		Body: "body", Status: models.ContentStatusPublished,
 		AuthorID: authorID, PublishedAt: &now,
@@ -1337,7 +1343,7 @@ func TestRenderPageCachesTemplates(t *testing.T) {
 	eng := New(ts)
 
 	// First render should populate the cache.
-	_, err = eng.RenderPage(content, nil)
+	_, err = eng.RenderPage(testTenantID, testSiteName, content, nil)
 	if err != nil {
 		t.Fatalf("RenderPage: %v", err)
 	}
@@ -1360,7 +1366,7 @@ func TestRenderPageCachesTemplates(t *testing.T) {
 
 	// Second render should use the cache (we cannot easily prove it skipped
 	// DB, but we verify it still works correctly).
-	result2, err := eng.RenderPage(content, nil)
+	result2, err := eng.RenderPage(testTenantID, testSiteName, content, nil)
 	if err != nil {
 		t.Fatalf("second RenderPage: %v", err)
 	}
@@ -1375,7 +1381,7 @@ func TestRenderPageCachesTemplates(t *testing.T) {
 	}
 
 	// Render again — should re-populate the cache.
-	_, err = eng.RenderPage(content, nil)
+	_, err = eng.RenderPage(testTenantID, testSiteName, content, nil)
 	if err != nil {
 		t.Fatalf("third RenderPage after invalidation: %v", err)
 	}

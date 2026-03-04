@@ -45,13 +45,13 @@ func scanContent(scanner interface{ Scan(...any) error }) (*models.Content, erro
 }
 
 // ListByType returns all content items of the given type, ordered by creation date descending.
-func (s *ContentStore) ListByType(contentType models.ContentType) ([]models.Content, error) {
+func (s *ContentStore) ListByType(tenantID uuid.UUID, contentType models.ContentType) ([]models.Content, error) {
 	rows, err := s.db.Query(`
 		SELECT `+contentColumns+`
 		FROM content
-		WHERE type = $1
+		WHERE tenant_id = $1 AND type = $2
 		ORDER BY created_at DESC
-	`, contentType)
+	`, tenantID, contentType)
 	if err != nil {
 		return nil, fmt.Errorf("list content by type: %w", err)
 	}
@@ -82,11 +82,11 @@ func (s *ContentStore) FindByID(id uuid.UUID) (*models.Content, error) {
 }
 
 // FindBySlug retrieves a published content item by its slug. Used for public page rendering.
-func (s *ContentStore) FindBySlug(slug string) (*models.Content, error) {
+func (s *ContentStore) FindBySlug(tenantID uuid.UUID, slug string) (*models.Content, error) {
 	row := s.db.QueryRow(`
 		SELECT `+contentColumns+`
-		FROM content WHERE slug = $1 AND status = 'published'
-	`, slug)
+		FROM content WHERE tenant_id = $1 AND slug = $2 AND status = 'published'
+	`, tenantID, slug)
 	c, err := scanContent(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -98,7 +98,7 @@ func (s *ContentStore) FindBySlug(slug string) (*models.Content, error) {
 }
 
 // Create inserts a new content item and returns it with the generated ID.
-func (s *ContentStore) Create(c *models.Content) (*models.Content, error) {
+func (s *ContentStore) Create(tenantID uuid.UUID, c *models.Content) (*models.Content, error) {
 	// If publishing, set the published_at timestamp.
 	if c.Status == models.ContentStatusPublished && c.PublishedAt == nil {
 		now := time.Now()
@@ -106,12 +106,12 @@ func (s *ContentStore) Create(c *models.Content) (*models.Content, error) {
 	}
 
 	row := s.db.QueryRow(`
-		INSERT INTO content (type, title, slug, body, body_format, excerpt, status,
+		INSERT INTO content (tenant_id, type, title, slug, body, body_format, excerpt, status,
 		                     meta_description, meta_keywords, featured_image_id,
 		                     category_id, author_id, published_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING `+contentColumns,
-		c.Type, c.Title, c.Slug, c.Body, c.BodyFormat, c.Excerpt, c.Status,
+		tenantID, c.Type, c.Title, c.Slug, c.Body, c.BodyFormat, c.Excerpt, c.Status,
 		c.MetaDescription, c.MetaKeywords, c.FeaturedImageID,
 		c.CategoryID, c.AuthorID, c.PublishedAt,
 	)
@@ -158,13 +158,13 @@ func (s *ContentStore) Delete(id uuid.UUID) error {
 
 // ListPublishedByType returns all published content of the given type,
 // ordered by published date descending. Used for public page rendering.
-func (s *ContentStore) ListPublishedByType(contentType models.ContentType) ([]models.Content, error) {
+func (s *ContentStore) ListPublishedByType(tenantID uuid.UUID, contentType models.ContentType) ([]models.Content, error) {
 	rows, err := s.db.Query(`
 		SELECT `+contentColumns+`
 		FROM content
-		WHERE type = $1 AND status = 'published'
+		WHERE tenant_id = $1 AND type = $2 AND status = 'published'
 		ORDER BY published_at DESC NULLS LAST
-	`, contentType)
+	`, tenantID, contentType)
 	if err != nil {
 		return nil, fmt.Errorf("list published content: %w", err)
 	}
@@ -182,9 +182,9 @@ func (s *ContentStore) ListPublishedByType(contentType models.ContentType) ([]mo
 }
 
 // CountByType returns the number of content items of the given type.
-func (s *ContentStore) CountByType(contentType models.ContentType) (int, error) {
+func (s *ContentStore) CountByType(tenantID uuid.UUID, contentType models.ContentType) (int, error) {
 	var count int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM content WHERE type = $1`, contentType).Scan(&count)
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM content WHERE tenant_id = $1 AND type = $2`, tenantID, contentType).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count content: %w", err)
 	}

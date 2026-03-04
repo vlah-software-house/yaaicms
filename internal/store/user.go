@@ -26,16 +26,29 @@ func NewUserStore(db *sql.DB) *UserStore {
 	return &UserStore{db: db}
 }
 
-// FindByEmail retrieves a user by their email address. Returns nil if not found.
-func (s *UserStore) FindByEmail(email string) (*models.User, error) {
-	u := &models.User{}
-	err := s.db.QueryRow(`
-		SELECT id, email, password_hash, display_name, role, totp_secret, totp_enabled, created_at, updated_at
-		FROM users WHERE email = $1
-	`, email).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role,
+// userColumns lists the columns selected in user queries.
+// Note: role is no longer on the users table (moved to user_tenants).
+const userColumns = `id, email, password_hash, display_name, is_super_admin,
+	totp_secret, totp_enabled, created_at, updated_at`
+
+// scanUser scans a user row from the result set.
+func scanUser(scanner interface{ Scan(...any) error }) (*models.User, error) {
+	var u models.User
+	err := scanner.Scan(
+		&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsSuperAdmin,
 		&u.TOTPSecret, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+// FindByEmail retrieves a user by their email address. Returns nil if not found.
+// Email is globally unique across all tenants.
+func (s *UserStore) FindByEmail(email string) (*models.User, error) {
+	row := s.db.QueryRow(`SELECT `+userColumns+` FROM users WHERE email = $1`, email)
+	u, err := scanUser(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -47,14 +60,8 @@ func (s *UserStore) FindByEmail(email string) (*models.User, error) {
 
 // FindByID retrieves a user by their UUID. Returns nil if not found.
 func (s *UserStore) FindByID(id uuid.UUID) (*models.User, error) {
-	u := &models.User{}
-	err := s.db.QueryRow(`
-		SELECT id, email, password_hash, display_name, role, totp_secret, totp_enabled, created_at, updated_at
-		FROM users WHERE id = $1
-	`, id).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role,
-		&u.TOTPSecret, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt,
-	)
+	row := s.db.QueryRow(`SELECT `+userColumns+` FROM users WHERE id = $1`, id)
+	u, err := scanUser(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -64,12 +71,9 @@ func (s *UserStore) FindByID(id uuid.UUID) (*models.User, error) {
 	return u, nil
 }
 
-// List returns all users ordered by creation date.
+// List returns all users ordered by creation date. Super-admin only operation.
 func (s *UserStore) List() ([]models.User, error) {
-	rows, err := s.db.Query(`
-		SELECT id, email, password_hash, display_name, role, totp_secret, totp_enabled, created_at, updated_at
-		FROM users ORDER BY created_at ASC
-	`)
+	rows, err := s.db.Query(`SELECT ` + userColumns + ` FROM users ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
@@ -77,38 +81,140 @@ func (s *UserStore) List() ([]models.User, error) {
 
 	var users []models.User
 	for rows.Next() {
-		var u models.User
-		if err := rows.Scan(
-			&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role,
-			&u.TOTPSecret, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt,
-		); err != nil {
+		u, err := scanUser(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
-		users = append(users, u)
+		users = append(users, *u)
 	}
 	return users, rows.Err()
 }
 
+// ListByTenant returns all users belonging to a specific tenant, with their
+// per-tenant role. Results are ordered by display name.
+func (s *UserStore) ListByTenant(tenantID uuid.UUID) ([]UserWithRole, error) {
+	rows, err := s.db.Query(`
+		SELECT u.id, u.email, u.password_hash, u.display_name, u.is_super_admin,
+			u.totp_secret, u.totp_enabled, u.created_at, u.updated_at, ut.role
+		FROM users u
+		JOIN user_tenants ut ON ut.user_id = u.id
+		WHERE ut.tenant_id = $1
+		ORDER BY u.display_name ASC
+	`, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("list users by tenant: %w", err)
+	}
+	defer rows.Close()
+
+	var results []UserWithRole
+	for rows.Next() {
+		var u models.User
+		var role string
+		if err := rows.Scan(
+			&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsSuperAdmin,
+			&u.TOTPSecret, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt, &role,
+		); err != nil {
+			return nil, fmt.Errorf("scan user with role: %w", err)
+		}
+		results = append(results, UserWithRole{User: u, TenantRole: models.Role(role)})
+	}
+	return results, rows.Err()
+}
+
+// UserWithRole pairs a user with their role in a specific tenant.
+type UserWithRole struct {
+	User       models.User
+	TenantRole models.Role
+}
+
 // Create inserts a new user with a bcrypt-hashed password.
-func (s *UserStore) Create(email, password, displayName string, role models.Role) (*models.User, error) {
+// The user is NOT automatically assigned to any tenant — call AddToTenant separately.
+func (s *UserStore) Create(email, password, displayName string) (*models.User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	u := &models.User{}
-	err = s.db.QueryRow(`
-		INSERT INTO users (email, password_hash, display_name, role)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, email, password_hash, display_name, role, totp_secret, totp_enabled, created_at, updated_at
-	`, email, string(hash), displayName, role).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role,
-		&u.TOTPSecret, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt,
+	row := s.db.QueryRow(`
+		INSERT INTO users (email, password_hash, display_name)
+		VALUES ($1, $2, $3)
+		RETURNING `+userColumns,
+		email, string(hash), displayName,
 	)
+	u, err := scanUser(row)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 	return u, nil
+}
+
+// AddToTenant assigns a user to a tenant with the given role.
+func (s *UserStore) AddToTenant(userID, tenantID uuid.UUID, role models.Role) error {
+	_, err := s.db.Exec(`
+		INSERT INTO user_tenants (user_id, tenant_id, role)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = EXCLUDED.role
+	`, userID, tenantID, role)
+	if err != nil {
+		return fmt.Errorf("add user to tenant: %w", err)
+	}
+	return nil
+}
+
+// RemoveFromTenant removes a user from a tenant.
+func (s *UserStore) RemoveFromTenant(userID, tenantID uuid.UUID) error {
+	_, err := s.db.Exec(`DELETE FROM user_tenants WHERE user_id = $1 AND tenant_id = $2`, userID, tenantID)
+	if err != nil {
+		return fmt.Errorf("remove user from tenant: %w", err)
+	}
+	return nil
+}
+
+// GetTenants returns all tenant memberships for a user (tenant info + role).
+func (s *UserStore) GetTenants(userID uuid.UUID) ([]models.TenantMembership, error) {
+	rows, err := s.db.Query(`
+		SELECT t.id, t.name, t.subdomain, t.is_active, t.created_at, t.updated_at, ut.role
+		FROM tenants t
+		JOIN user_tenants ut ON ut.tenant_id = t.id
+		WHERE ut.user_id = $1 AND t.is_active = TRUE
+		ORDER BY t.name
+	`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get user tenants: %w", err)
+	}
+	defer rows.Close()
+
+	var memberships []models.TenantMembership
+	for rows.Next() {
+		var m models.TenantMembership
+		var role string
+		if err := rows.Scan(
+			&m.Tenant.ID, &m.Tenant.Name, &m.Tenant.Subdomain,
+			&m.Tenant.IsActive, &m.Tenant.CreatedAt, &m.Tenant.UpdatedAt,
+			&role,
+		); err != nil {
+			return nil, fmt.Errorf("scan tenant membership: %w", err)
+		}
+		m.Role = models.Role(role)
+		memberships = append(memberships, m)
+	}
+	return memberships, rows.Err()
+}
+
+// GetTenantRole returns the user's role in a specific tenant.
+// Returns empty string if the user is not a member.
+func (s *UserStore) GetTenantRole(userID, tenantID uuid.UUID) (models.Role, error) {
+	var role string
+	err := s.db.QueryRow(`
+		SELECT role FROM user_tenants WHERE user_id = $1 AND tenant_id = $2
+	`, userID, tenantID).Scan(&role)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("get tenant role: %w", err)
+	}
+	return models.Role(role), nil
 }
 
 // SetTOTPSecret saves the TOTP secret for a user (during 2FA setup).

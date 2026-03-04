@@ -75,12 +75,13 @@ func (a *Auth) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a session. TwoFADone starts as false — user must complete 2FA.
+	// TenantID and TenantRole are set after 2FA verification, during tenant selection.
 	_, err = a.sessions.Create(r.Context(), w, &session.Data{
-		UserID:      user.ID,
-		Email:       user.Email,
-		DisplayName: user.DisplayName,
-		Role:        string(user.Role),
-		TwoFADone:   false,
+		UserID:       user.ID,
+		Email:        user.Email,
+		DisplayName:  user.DisplayName,
+		IsSuperAdmin: user.IsSuperAdmin,
+		TwoFADone:    false,
 	})
 	if err != nil {
 		slog.Error("session create failed", "error", err)
@@ -245,13 +246,48 @@ func (a *Auth) TwoFAVerifySubmit(w http.ResponseWriter, r *http.Request) {
 
 	// Mark 2FA as complete in the session.
 	sess.TwoFADone = true
+
+	// Look up the user's tenant memberships to determine where to redirect.
+	tenants, err := a.userStore.GetTenants(sess.UserID)
+	if err != nil {
+		slog.Error("get tenants failed", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	var redirectURL string
+
+	switch len(tenants) {
+	case 0:
+		// No tenant memberships.
+		if sess.IsSuperAdmin {
+			// Super admins can manage tenants without belonging to one.
+			redirectURL = "/admin/tenants"
+		} else {
+			// Regular user with no tenants — cannot proceed.
+			a.renderer.Page(w, r, "2fa_verify", &render.PageData{
+				Title: "Two-Factor Authentication",
+				Data:  map[string]any{"Error": "You are not a member of any tenant. Please contact an administrator."},
+			})
+			return
+		}
+	case 1:
+		// Exactly one tenant — auto-select it.
+		sess.TenantID = tenants[0].Tenant.ID
+		sess.TenantRole = string(tenants[0].Role)
+		redirectURL = "/admin/dashboard"
+	default:
+		// Multiple tenants — redirect to tenant picker.
+		redirectURL = "/admin/select-tenant"
+	}
+
 	if err := a.sessions.Update(r.Context(), r, sess); err != nil {
 		slog.Error("session update failed", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	http.Redirect(w, r, "/admin/dashboard", http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
 
 // Logout destroys the session and redirects to the login page.

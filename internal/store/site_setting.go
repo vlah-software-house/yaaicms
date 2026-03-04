@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/google/uuid"
+
 	"yaaicms/internal/models"
 )
 
@@ -22,8 +24,8 @@ func NewSiteSettingStore(db *sql.DB) *SiteSettingStore {
 }
 
 // All returns every setting as a convenience map.
-func (s *SiteSettingStore) All() (models.SiteSettings, error) {
-	rows, err := s.db.Query(`SELECT key, value FROM site_settings ORDER BY key`)
+func (s *SiteSettingStore) All(tenantID uuid.UUID) (models.SiteSettings, error) {
+	rows, err := s.db.Query(`SELECT key, value FROM site_settings WHERE tenant_id = $1 ORDER BY key`, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -41,9 +43,9 @@ func (s *SiteSettingStore) All() (models.SiteSettings, error) {
 }
 
 // Get returns a single setting by key, or the fallback if not found.
-func (s *SiteSettingStore) Get(key, fallback string) (string, error) {
+func (s *SiteSettingStore) Get(tenantID uuid.UUID, key, fallback string) (string, error) {
 	var val string
-	err := s.db.QueryRow(`SELECT value FROM site_settings WHERE key = $1`, key).Scan(&val)
+	err := s.db.QueryRow(`SELECT value FROM site_settings WHERE key = $1 AND tenant_id = $2`, key, tenantID).Scan(&val)
 	if err == sql.ErrNoRows {
 		return fallback, nil
 	}
@@ -57,19 +59,19 @@ func (s *SiteSettingStore) Get(key, fallback string) (string, error) {
 }
 
 // Set upserts a single setting. Creates it if it doesn't exist.
-func (s *SiteSettingStore) Set(key, value string) error {
+func (s *SiteSettingStore) Set(tenantID uuid.UUID, key, value string) error {
 	_, err := s.db.Exec(`
-		INSERT INTO site_settings (key, value, updated_at)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (key)
+		INSERT INTO site_settings (tenant_id, key, value, updated_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (tenant_id, key)
 		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
-		key, value, time.Now(),
+		tenantID, key, value, time.Now(),
 	)
 	return err
 }
 
 // SetMany updates multiple settings in a single transaction.
-func (s *SiteSettingStore) SetMany(settings map[string]string) error {
+func (s *SiteSettingStore) SetMany(tenantID uuid.UUID, settings map[string]string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -77,9 +79,9 @@ func (s *SiteSettingStore) SetMany(settings map[string]string) error {
 	defer tx.Rollback()
 
 	stmt, err := tx.Prepare(`
-		INSERT INTO site_settings (key, value, updated_at)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (key)
+		INSERT INTO site_settings (tenant_id, key, value, updated_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (tenant_id, key)
 		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`)
 	if err != nil {
 		return err
@@ -88,7 +90,7 @@ func (s *SiteSettingStore) SetMany(settings map[string]string) error {
 
 	now := time.Now()
 	for k, v := range settings {
-		if _, err := stmt.Exec(k, v, now); err != nil {
+		if _, err := stmt.Exec(tenantID, k, v, now); err != nil {
 			return err
 		}
 	}

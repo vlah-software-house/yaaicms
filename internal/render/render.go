@@ -50,9 +50,10 @@ type Renderer struct {
 // standaloneTemplates lists templates that render as full HTML pages
 // without the base layout (they have their own <html>, <head>, etc.).
 var standaloneTemplates = map[string]bool{
-	"login":      true,
-	"2fa_setup":  true,
-	"2fa_verify": true,
+	"login":         true,
+	"2fa_setup":     true,
+	"2fa_verify":    true,
+	"select_tenant": true,
 }
 
 // New creates a Renderer by parsing all admin templates from the embedded

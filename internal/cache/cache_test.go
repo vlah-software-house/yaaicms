@@ -132,11 +132,12 @@ func TestPageCacheInvalidateHomepage(t *testing.T) {
 
 	ctx := context.Background()
 
-	pc.Set(ctx, HomepageKey(), []byte("homepage"))
+	testTenantID := "00000000-0000-0000-0000-000000000001"
+	pc.Set(ctx, HomepageKey(testTenantID), []byte("homepage"))
 
 	pc.InvalidateHomepage(ctx)
 
-	_, ok := pc.Get(ctx, HomepageKey())
+	_, ok := pc.Get(ctx, HomepageKey(testTenantID))
 	if ok {
 		t.Error("expected homepage cache miss after invalidation")
 	}
@@ -166,14 +167,18 @@ func TestPageCacheInvalidateAll(t *testing.T) {
 }
 
 func TestHomepageKey(t *testing.T) {
-	if HomepageKey() != "_homepage" {
-		t.Errorf("HomepageKey: got %q, want %q", HomepageKey(), "_homepage")
+	testTenantID := "00000000-0000-0000-0000-000000000001"
+	expected := testTenantID + ":_homepage"
+	if HomepageKey(testTenantID) != expected {
+		t.Errorf("HomepageKey: got %q, want %q", HomepageKey(testTenantID), expected)
 	}
 }
 
 func TestSlugKey(t *testing.T) {
-	if SlugKey("about-us") != "about-us" {
-		t.Errorf("SlugKey: got %q, want %q", SlugKey("about-us"), "about-us")
+	testTenantID := "00000000-0000-0000-0000-000000000001"
+	expected := testTenantID + ":about-us"
+	if SlugKey(testTenantID, "about-us") != expected {
+		t.Errorf("SlugKey: got %q, want %q", SlugKey(testTenantID, "about-us"), expected)
 	}
 }
 

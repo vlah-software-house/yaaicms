@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-
-	"yaaicms/internal/models"
 )
 
 func TestUserStoreCreate(t *testing.T) {
@@ -19,7 +17,7 @@ func TestUserStoreCreate(t *testing.T) {
 	email := "test-create@store-test.local"
 	t.Cleanup(func() { cleanUsers(t, db, email) })
 
-	user, err := s.Create(email, "testpass123", "Test User", models.RoleEditor)
+	user, err := s.Create(email, "testpass123", "Test User")
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -32,9 +30,6 @@ func TestUserStoreCreate(t *testing.T) {
 	}
 	if user.DisplayName != "Test User" {
 		t.Errorf("display name: got %q, want %q", user.DisplayName, "Test User")
-	}
-	if user.Role != models.RoleEditor {
-		t.Errorf("role: got %q, want %q", user.Role, models.RoleEditor)
 	}
 	if user.TOTPEnabled {
 		t.Error("expected totp_enabled=false for new user")
@@ -64,7 +59,7 @@ func TestUserStoreFindByEmail(t *testing.T) {
 	}
 
 	// Create and find.
-	created, err := s.Create(email, "pass", "Find Me", models.RoleAuthor)
+	created, err := s.Create(email, "pass", "Find Me")
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -98,7 +93,7 @@ func TestUserStoreFindByID(t *testing.T) {
 	}
 
 	// Create and find.
-	created, _ := s.Create(email, "pass", "By ID", models.RoleAdmin)
+	created, _ := s.Create(email, "pass", "By ID")
 	user, err = s.FindByID(created.ID)
 	if err != nil {
 		t.Fatalf("FindByID: %v", err)
@@ -119,8 +114,8 @@ func TestUserStoreList(t *testing.T) {
 	email2 := "test-list-b@store-test.local"
 	t.Cleanup(func() { cleanUsers(t, db, email1, email2) })
 
-	s.Create(email1, "pass", "A", models.RoleEditor)
-	s.Create(email2, "pass", "B", models.RoleAuthor)
+	s.Create(email1, "pass", "A")
+	s.Create(email2, "pass", "B")
 
 	users, err := s.List()
 	if err != nil {
@@ -140,7 +135,7 @@ func TestUserStoreCheckPassword(t *testing.T) {
 	email := "test-checkpass@store-test.local"
 	t.Cleanup(func() { cleanUsers(t, db, email) })
 
-	user, _ := s.Create(email, "correct-password", "PW Check", models.RoleEditor)
+	user, _ := s.Create(email, "correct-password", "PW Check")
 
 	if !s.CheckPassword(user, "correct-password") {
 		t.Error("expected CheckPassword to return true for correct password")
@@ -160,7 +155,7 @@ func TestUserStoreTOTPLifecycle(t *testing.T) {
 	email := "test-totp@store-test.local"
 	t.Cleanup(func() { cleanUsers(t, db, email) })
 
-	user, _ := s.Create(email, "pass", "TOTP User", models.RoleEditor)
+	user, _ := s.Create(email, "pass", "TOTP User")
 
 	// Initially no TOTP.
 	if user.TOTPSecret != nil {
@@ -214,7 +209,7 @@ func TestUserStoreDelete(t *testing.T) {
 	email := "test-delete@store-test.local"
 	// No cleanup needed since we're deleting.
 
-	user, _ := s.Create(email, "pass", "Delete Me", models.RoleAuthor)
+	user, _ := s.Create(email, "pass", "Delete Me")
 
 	if err := s.Delete(user.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
@@ -233,12 +228,12 @@ func TestUserStoreDuplicateEmail(t *testing.T) {
 	email := "test-dupe@store-test.local"
 	t.Cleanup(func() { cleanUsers(t, db, email) })
 
-	_, err := s.Create(email, "pass", "First", models.RoleEditor)
+	_, err := s.Create(email, "pass", "First")
 	if err != nil {
 		t.Fatalf("first Create: %v", err)
 	}
 
-	_, err = s.Create(email, "pass", "Second", models.RoleEditor)
+	_, err = s.Create(email, "pass", "Second")
 	if err == nil {
 		t.Error("expected error for duplicate email, got nil")
 	}

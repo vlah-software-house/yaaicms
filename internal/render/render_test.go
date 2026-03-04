@@ -20,11 +20,12 @@ import (
 // helperSession returns a session.Data suitable for rendering admin templates.
 func helperSession() *session.Data {
 	return &session.Data{
-		UserID:      uuid.New(),
-		Email:       "test@yaaicms.local",
-		DisplayName: "Test User",
-		Role:        "admin",
-		TwoFADone:   true,
+		UserID:       uuid.New(),
+		Email:        "test@yaaicms.local",
+		DisplayName:  "Test User",
+		IsSuperAdmin: true,
+		TenantRole:   "admin",
+		TwoFADone:    true,
 	}
 }
 

@@ -26,11 +26,11 @@ func NewCacheLogStore(db *sql.DB) *CacheLogStore {
 }
 
 // Log records a cache invalidation event.
-func (s *CacheLogStore) Log(entityType string, entityID uuid.UUID, action string) {
+func (s *CacheLogStore) Log(tenantID uuid.UUID, entityType string, entityID uuid.UUID, action string) {
 	_, err := s.db.Exec(`
-		INSERT INTO cache_invalidation_log (entity_type, entity_id, action)
-		VALUES ($1, $2, $3)
-	`, entityType, entityID, action)
+		INSERT INTO cache_invalidation_log (tenant_id, entity_type, entity_id, action)
+		VALUES ($1, $2, $3, $4)
+	`, tenantID, entityType, entityID, action)
 	if err != nil {
 		// Log but don't fail — cache logging is best-effort.
 		slog.Warn("failed to log cache invalidation",
@@ -50,13 +50,14 @@ func (s *CacheLogStore) Log(entityType string, entityID uuid.UUID, action string
 
 // RecentEntries returns the most recent cache invalidation events for
 // debugging. Limited to the specified count.
-func (s *CacheLogStore) RecentEntries(limit int) ([]CacheLogEntry, error) {
+func (s *CacheLogStore) RecentEntries(tenantID uuid.UUID, limit int) ([]CacheLogEntry, error) {
 	rows, err := s.db.Query(`
 		SELECT id, entity_type, entity_id, action, invalidated_at
 		FROM cache_invalidation_log
+		WHERE tenant_id = $1
 		ORDER BY invalidated_at DESC
-		LIMIT $1
-	`, limit)
+		LIMIT $2
+	`, tenantID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query cache log: %w", err)
 	}

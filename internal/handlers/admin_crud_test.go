@@ -309,7 +309,7 @@ func TestPageEdit_ValidUUID_Returns200(t *testing.T) {
 	slug := "test-page-edit-" + uuid.New().String()[:8]
 	t.Cleanup(func() { cleanContent(t, env.DB, slug) })
 
-	page, _ := env.ContentStore.Create(&models.Content{
+	page, _ := env.ContentStore.Create(testTenantID, &models.Content{
 		Type: models.ContentTypePage, Title: "Page To Edit", Slug: slug,
 		Body: "body", Status: models.ContentStatusDraft, AuthorID: authorID,
 	})
@@ -346,7 +346,7 @@ func TestPageUpdate_ValidData_Redirects(t *testing.T) {
 	slug := "test-page-update-" + uuid.New().String()[:8]
 	t.Cleanup(func() { cleanContent(t, env.DB, slug) })
 
-	page, _ := env.ContentStore.Create(&models.Content{
+	page, _ := env.ContentStore.Create(testTenantID, &models.Content{
 		Type: models.ContentTypePage, Title: "Original Page", Slug: slug,
 		Body: "original", Status: models.ContentStatusDraft, AuthorID: authorID,
 	})
@@ -381,7 +381,7 @@ func TestPageUpdate_MissingTitle_ReRendersForm(t *testing.T) {
 	slug := "test-page-upd-bad-" + uuid.New().String()[:8]
 	t.Cleanup(func() { cleanContent(t, env.DB, slug) })
 
-	page, _ := env.ContentStore.Create(&models.Content{
+	page, _ := env.ContentStore.Create(testTenantID, &models.Content{
 		Type: models.ContentTypePage, Title: "Page Title", Slug: slug,
 		Body: "body", Status: models.ContentStatusDraft, AuthorID: authorID,
 	})
@@ -413,7 +413,7 @@ func TestPageDelete_Redirects(t *testing.T) {
 
 	slug := "test-page-delete-" + uuid.New().String()[:8]
 
-	page, _ := env.ContentStore.Create(&models.Content{
+	page, _ := env.ContentStore.Create(testTenantID, &models.Content{
 		Type: models.ContentTypePage, Title: "Page To Delete", Slug: slug,
 		Body: "body", Status: models.ContentStatusDraft, AuthorID: authorID,
 	})
@@ -746,7 +746,7 @@ func TestUserResetTwoFA_OtherUser_Redirects(t *testing.T) {
 
 	// Create a second user to reset. Use a unique email to avoid conflicts.
 	targetEmail := "reset-target-" + uuid.New().String()[:8] + "@test.local"
-	targetUser, err := env.UserStore.Create(targetEmail, "password123", "Target User", "editor")
+	targetUser, err := env.UserStore.Create(targetEmail, "password123", "Target User")
 	if err != nil {
 		t.Fatalf("create target user: %v", err)
 	}
@@ -864,7 +864,7 @@ func TestPostCreate_AutoGeneratesSlugFromTitle(t *testing.T) {
 	}
 
 	// Verify the post was created with the auto-generated slug.
-	items, err := env.ContentStore.ListByType("post")
+	items, err := env.ContentStore.ListByType(testTenantID, "post")
 	if err != nil {
 		t.Fatalf("ListByType: %v", err)
 	}
@@ -959,6 +959,9 @@ func TestTemplateUpdate_InvalidSyntax_ReRendersForm(t *testing.T) {
 
 // createTestPost inserts a test post directly through the content store and
 // returns the created item. The caller is responsible for cleanup.
+// testTenantID is a fixed tenant ID used across handler integration tests.
+var testTenantID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
 func createTestPost(t *testing.T, env *testEnv, authorID uuid.UUID, title, slug string) *models.Content {
 	t.Helper()
 	c := &models.Content{
@@ -969,7 +972,7 @@ func createTestPost(t *testing.T, env *testEnv, authorID uuid.UUID, title, slug 
 		Status:   models.ContentStatusDraft,
 		AuthorID: authorID,
 	}
-	created, err := env.ContentStore.Create(c)
+	created, err := env.ContentStore.Create(testTenantID, c)
 	if err != nil {
 		t.Fatalf("createTestPost: %v", err)
 	}
@@ -985,7 +988,7 @@ func createTestTemplate(t *testing.T, env *testEnv, name, tmplType, htmlContent 
 		Type:        models.TemplateType(tmplType),
 		HTMLContent: htmlContent,
 	}
-	created, err := env.TemplateStore.Create(tmpl)
+	created, err := env.TemplateStore.Create(testTenantID, tmpl)
 	if err != nil {
 		t.Fatalf("createTestTemplate: %v", err)
 	}

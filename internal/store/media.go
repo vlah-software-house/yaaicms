@@ -41,13 +41,13 @@ func scanMedia(scanner interface{ Scan(...any) error }) (*models.Media, error) {
 }
 
 // Create inserts a new media record and returns it with the generated ID.
-func (s *MediaStore) Create(m *models.Media) (*models.Media, error) {
+func (s *MediaStore) Create(tenantID uuid.UUID, m *models.Media) (*models.Media, error) {
 	err := s.db.QueryRow(`
-		INSERT INTO media (filename, original_name, content_type, size_bytes,
+		INSERT INTO media (tenant_id, filename, original_name, content_type, size_bytes,
 			bucket, s3_key, thumb_s3_key, alt_text, uploader_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING `+mediaColumns,
-		m.Filename, m.OriginalName, m.ContentType, m.SizeBytes,
+		tenantID, m.Filename, m.OriginalName, m.ContentType, m.SizeBytes,
 		m.Bucket, m.S3Key, m.ThumbS3Key, m.AltText, m.UploaderID,
 	).Scan(
 		&m.ID, &m.Filename, &m.OriginalName, &m.ContentType, &m.SizeBytes,
@@ -73,13 +73,14 @@ func (s *MediaStore) FindByID(id uuid.UUID) (*models.Media, error) {
 }
 
 // List returns media items ordered by creation date, with pagination.
-func (s *MediaStore) List(limit, offset int) ([]models.Media, error) {
+func (s *MediaStore) List(tenantID uuid.UUID, limit, offset int) ([]models.Media, error) {
 	rows, err := s.db.Query(`
 		SELECT `+mediaColumns+`
 		FROM media
+		WHERE tenant_id = $1
 		ORDER BY created_at DESC
-		LIMIT $1 OFFSET $2
-	`, limit, offset)
+		LIMIT $2 OFFSET $3
+	`, tenantID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("list media: %w", err)
 	}
@@ -161,9 +162,9 @@ func (s *MediaStore) FindByS3Keys(keys []string) (map[string]*models.Media, erro
 }
 
 // Count returns the total number of media items.
-func (s *MediaStore) Count() (int, error) {
+func (s *MediaStore) Count(tenantID uuid.UUID) (int, error) {
 	var count int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM media`).Scan(&count)
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM media WHERE tenant_id = $1`, tenantID).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count media: %w", err)
 	}

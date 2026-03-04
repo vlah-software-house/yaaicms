@@ -6,28 +6,22 @@ package models
 
 import "testing"
 
-// TestUserIsAdmin verifies that IsAdmin returns true only for the admin role.
-func TestUserIsAdmin(t *testing.T) {
+// TestUserIsSuperAdmin verifies the IsSuperAdmin field on the User struct.
+func TestUserIsSuperAdmin(t *testing.T) {
 	tests := []struct {
-		name string
-		role Role
-		want bool
+		name         string
+		isSuperAdmin bool
+		want         bool
 	}{
-		{name: "admin role", role: RoleAdmin, want: true},
-		{name: "editor role", role: RoleEditor, want: false},
-		{name: "author role", role: RoleAuthor, want: false},
-		{name: "empty role", role: Role(""), want: false},
-		{name: "unknown role", role: Role("superadmin"), want: false},
-		{name: "uppercase ADMIN", role: Role("ADMIN"), want: false},
-		{name: "mixed case Admin", role: Role("Admin"), want: false},
+		{name: "super admin true", isSuperAdmin: true, want: true},
+		{name: "super admin false", isSuperAdmin: false, want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := &User{Role: tt.role}
-			got := u.IsAdmin()
-			if got != tt.want {
-				t.Errorf("User{Role: %q}.IsAdmin() = %v, want %v", tt.role, got, tt.want)
+			u := &User{IsSuperAdmin: tt.isSuperAdmin}
+			if u.IsSuperAdmin != tt.want {
+				t.Errorf("User{IsSuperAdmin: %v}.IsSuperAdmin = %v, want %v", tt.isSuperAdmin, u.IsSuperAdmin, tt.want)
 			}
 		})
 	}

@@ -13,17 +13,19 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/redis/go-redis/v9"
 
 	"yaaicms/internal/handlers"
 	"yaaicms/internal/middleware"
 	"yaaicms/internal/session"
+	"yaaicms/internal/store"
 	"yaaicms/web"
 )
 
 // New creates and returns the configured Chi router with all middleware
 // and route groups wired up. Set secureCookies to true in production to
 // mark CSRF cookies as Secure (HTTPS-only).
-func New(sessionStore *session.Store, admin *handlers.Admin, auth *handlers.Auth, public *handlers.Public, secureCookies bool) chi.Router {
+func New(sessionStore *session.Store, admin *handlers.Admin, auth *handlers.Auth, public *handlers.Public, tenant *handlers.TenantAdmin, tenantStore *store.TenantStore, valkeyClient *redis.Client, baseDomain string, secureCookies bool) chi.Router {
 	r := chi.NewRouter()
 
 	// Rate limiters: auth endpoints are tightly limited (brute-force protection),
@@ -65,6 +67,14 @@ func New(sessionStore *session.Store, admin *handlers.Admin, auth *handlers.Auth
 			r.Get("/2fa/setup", auth.TwoFASetupPage)
 			r.Get("/2fa/verify", auth.TwoFAVerifyPage)
 			r.Post("/2fa/verify", auth.TwoFAVerifySubmit)
+		})
+
+		// Tenant selection — requires auth + 2FA but no tenant context yet.
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAuth)
+			r.Use(middleware.Require2FA)
+			r.Get("/select-tenant", tenant.SelectTenantPage)
+			r.Post("/select-tenant", tenant.SelectTenantSubmit)
 		})
 
 		// Authenticated + 2FA-verified admin area.
@@ -180,12 +190,30 @@ func New(sessionStore *session.Store, admin *handlers.Admin, auth *handlers.Auth
 
 			// Help
 			r.Get("/help", admin.HelpPage)
+
+			// Tenant management — super-admin only
+			r.Route("/tenants", func(r chi.Router) {
+				r.Use(middleware.RequireSuperAdmin)
+				r.Get("/", tenant.TenantList)
+				r.Get("/new", tenant.TenantNew)
+				r.Post("/", tenant.TenantCreate)
+				r.Get("/{id}", tenant.TenantEdit)
+				r.Put("/{id}", tenant.TenantUpdate)
+				r.Delete("/{id}", tenant.TenantDelete)
+				r.Get("/{id}/users", tenant.TenantUsers)
+				r.Post("/{id}/users", tenant.TenantAddUser)
+				r.Delete("/{id}/users/{uid}", tenant.TenantRemoveUser)
+			})
 		})
 	})
 
 	// Public routes — served by the dynamic template engine.
-	r.Get("/", public.Homepage)
-	r.Get("/{slug}", public.Page)
+	// Tenant resolution middleware identifies which tenant to serve based on subdomain.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.ResolveTenant(tenantStore, valkeyClient, baseDomain))
+		r.Get("/", public.Homepage)
+		r.Get("/{slug}", public.Page)
+	})
 
 	return r
 }

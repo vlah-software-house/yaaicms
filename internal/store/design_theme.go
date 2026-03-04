@@ -37,12 +37,13 @@ func scanTheme(scanner interface{ Scan(...any) error }) (*models.DesignTheme, er
 }
 
 // List returns all design themes ordered by creation date descending.
-func (s *DesignThemeStore) List() ([]models.DesignTheme, error) {
+func (s *DesignThemeStore) List(tenantID uuid.UUID) ([]models.DesignTheme, error) {
 	rows, err := s.db.Query(`
-		SELECT ` + themeColumns + `
+		SELECT `+themeColumns+`
 		FROM design_themes
+		WHERE tenant_id = $1
 		ORDER BY created_at DESC
-	`)
+	`, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("list design themes: %w", err)
 	}
@@ -73,8 +74,8 @@ func (s *DesignThemeStore) FindByID(id uuid.UUID) (*models.DesignTheme, error) {
 }
 
 // FindActive returns the currently active design theme, or nil if none is active.
-func (s *DesignThemeStore) FindActive() (*models.DesignTheme, error) {
-	row := s.db.QueryRow(`SELECT `+themeColumns+` FROM design_themes WHERE is_active = TRUE LIMIT 1`)
+func (s *DesignThemeStore) FindActive(tenantID uuid.UUID) (*models.DesignTheme, error) {
+	row := s.db.QueryRow(`SELECT `+themeColumns+` FROM design_themes WHERE is_active = TRUE AND tenant_id = $1 LIMIT 1`, tenantID)
 	t, err := scanTheme(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -86,12 +87,12 @@ func (s *DesignThemeStore) FindActive() (*models.DesignTheme, error) {
 }
 
 // Create inserts a new design theme and returns it with the generated ID.
-func (s *DesignThemeStore) Create(t *models.DesignTheme) (*models.DesignTheme, error) {
+func (s *DesignThemeStore) Create(tenantID uuid.UUID, t *models.DesignTheme) (*models.DesignTheme, error) {
 	err := s.db.QueryRow(`
-		INSERT INTO design_themes (name, style_prompt)
-		VALUES ($1, $2)
+		INSERT INTO design_themes (tenant_id, name, style_prompt)
+		VALUES ($1, $2, $3)
 		RETURNING `+themeColumns,
-		t.Name, t.StylePrompt,
+		tenantID, t.Name, t.StylePrompt,
 	).Scan(&t.ID, &t.Name, &t.StylePrompt, &t.IsActive, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create design theme: %w", err)
@@ -115,17 +116,17 @@ func (s *DesignThemeStore) Update(id uuid.UUID, name, stylePrompt string) error 
 	return nil
 }
 
-// Activate sets a theme as active and deactivates all others.
+// Activate sets a theme as active and deactivates all others within the tenant.
 // Uses a transaction to ensure atomicity.
-func (s *DesignThemeStore) Activate(id uuid.UUID) error {
+func (s *DesignThemeStore) Activate(tenantID uuid.UUID, id uuid.UUID) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Deactivate all themes.
-	if _, err := tx.Exec(`UPDATE design_themes SET is_active = FALSE WHERE is_active = TRUE`); err != nil {
+	// Deactivate all themes for this tenant.
+	if _, err := tx.Exec(`UPDATE design_themes SET is_active = FALSE WHERE is_active = TRUE AND tenant_id = $1`, tenantID); err != nil {
 		return fmt.Errorf("deactivate themes: %w", err)
 	}
 

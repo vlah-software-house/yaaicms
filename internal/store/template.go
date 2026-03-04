@@ -23,13 +23,14 @@ func NewTemplateStore(db *sql.DB) *TemplateStore {
 	return &TemplateStore{db: db}
 }
 
-// List returns all templates ordered by type and name.
-func (s *TemplateStore) List() ([]models.Template, error) {
+// List returns all templates for a tenant, ordered by type and name.
+func (s *TemplateStore) List(tenantID uuid.UUID) ([]models.Template, error) {
 	rows, err := s.db.Query(`
 		SELECT id, name, type, html_content, version, is_active, created_at, updated_at
 		FROM templates
+		WHERE tenant_id = $1
 		ORDER BY type, name
-	`)
+	`, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("list templates: %w", err)
 	}
@@ -68,15 +69,15 @@ func (s *TemplateStore) FindByID(id uuid.UUID) (*models.Template, error) {
 	return t, nil
 }
 
-// FindActiveByType returns the active template for the given type.
+// FindActiveByType returns the active template for the given type within a tenant.
 // Only one template per type should be active at a time.
-func (s *TemplateStore) FindActiveByType(tmplType models.TemplateType) (*models.Template, error) {
+func (s *TemplateStore) FindActiveByType(tenantID uuid.UUID, tmplType models.TemplateType) (*models.Template, error) {
 	t := &models.Template{}
 	err := s.db.QueryRow(`
 		SELECT id, name, type, html_content, version, is_active, created_at, updated_at
-		FROM templates WHERE type = $1 AND is_active = TRUE
+		FROM templates WHERE tenant_id = $1 AND type = $2 AND is_active = TRUE
 		LIMIT 1
-	`, tmplType).Scan(
+	`, tenantID, tmplType).Scan(
 		&t.ID, &t.Name, &t.Type, &t.HTMLContent, &t.Version,
 		&t.IsActive, &t.CreatedAt, &t.UpdatedAt,
 	)
@@ -89,14 +90,14 @@ func (s *TemplateStore) FindActiveByType(tmplType models.TemplateType) (*models.
 	return t, nil
 }
 
-// Create inserts a new template. Does NOT activate it automatically.
-func (s *TemplateStore) Create(t *models.Template) (*models.Template, error) {
+// Create inserts a new template for a tenant. Does NOT activate it automatically.
+func (s *TemplateStore) Create(tenantID uuid.UUID, t *models.Template) (*models.Template, error) {
 	result := &models.Template{}
 	err := s.db.QueryRow(`
-		INSERT INTO templates (name, type, html_content, version, is_active)
-		VALUES ($1, $2, $3, 1, FALSE)
+		INSERT INTO templates (tenant_id, name, type, html_content, version, is_active)
+		VALUES ($1, $2, $3, $4, 1, FALSE)
 		RETURNING id, name, type, html_content, version, is_active, created_at, updated_at
-	`, t.Name, t.Type, t.HTMLContent).Scan(
+	`, tenantID, t.Name, t.Type, t.HTMLContent).Scan(
 		&result.ID, &result.Name, &result.Type, &result.HTMLContent,
 		&result.Version, &result.IsActive, &result.CreatedAt, &result.UpdatedAt,
 	)
@@ -119,9 +120,9 @@ func (s *TemplateStore) Update(t *models.Template) error {
 	return nil
 }
 
-// Activate sets a template as the active one for its type, deactivating
-// any other template of the same type. Uses a transaction for atomicity.
-func (s *TemplateStore) Activate(id uuid.UUID) error {
+// Activate sets a template as the active one for its type within a tenant,
+// deactivating any other template of the same type. Uses a transaction for atomicity.
+func (s *TemplateStore) Activate(tenantID uuid.UUID, id uuid.UUID) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -135,8 +136,8 @@ func (s *TemplateStore) Activate(id uuid.UUID) error {
 		return fmt.Errorf("get template type: %w", err)
 	}
 
-	// Deactivate all templates of this type.
-	_, err = tx.Exec(`UPDATE templates SET is_active = FALSE WHERE type = $1`, tmplType)
+	// Deactivate all templates of this type within the tenant.
+	_, err = tx.Exec(`UPDATE templates SET is_active = FALSE WHERE type = $1 AND tenant_id = $2`, tmplType, tenantID)
 	if err != nil {
 		return fmt.Errorf("deactivate templates: %w", err)
 	}
@@ -163,10 +164,10 @@ func (s *TemplateStore) Delete(id uuid.UUID) error {
 	return nil
 }
 
-// Count returns the total number of templates.
-func (s *TemplateStore) Count() (int, error) {
+// Count returns the total number of templates for a tenant.
+func (s *TemplateStore) Count(tenantID uuid.UUID) (int, error) {
 	var count int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM templates`).Scan(&count)
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM templates WHERE tenant_id = $1`, tenantID).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count templates: %w", err)
 	}

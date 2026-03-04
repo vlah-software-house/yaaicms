@@ -12,13 +12,22 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// defaultTenantID is the well-known UUID for the default tenant created by
+// both the migration (for existing data) and the seed (for fresh installs).
+const defaultTenantID = "00000000-0000-0000-0000-000000000001"
+
 // Seed populates the database with initial development data.
-// It creates a default admin user if none exists. The admin will be
-// prompted to set up 2FA on first login (totp_enabled = false).
+// It creates a default tenant, admin user, templates, and sample content.
+// All seed functions are idempotent — they check before inserting.
 func Seed(db *sql.DB) error {
-	// Each seed function is idempotent — checks its own table before inserting.
+	if err := seedDefaultTenant(db); err != nil {
+		return err
+	}
 	if err := seedAdminUser(db); err != nil {
 		return err
+	}
+	if err := seedSiteSettings(db); err != nil {
+		return fmt.Errorf("seed site settings: %w", err)
 	}
 	if err := seedTemplates(db); err != nil {
 		return fmt.Errorf("seed templates: %w", err)
@@ -29,8 +38,32 @@ func Seed(db *sql.DB) error {
 	return nil
 }
 
-// seedAdminUser creates a default admin if no users exist. The admin must
-// set up 2FA on first login (totp_enabled = false).
+// seedDefaultTenant creates the default tenant if it doesn't exist.
+// The migration (00018) also creates this tenant for existing data,
+// but on a fresh install the tables are empty.
+func seedDefaultTenant(db *sql.DB) error {
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM tenants WHERE id = $1", defaultTenantID).Scan(&count); err != nil {
+		return fmt.Errorf("seed check tenant: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+
+	_, err := db.Exec(`
+		INSERT INTO tenants (id, name, subdomain)
+		VALUES ($1, $2, $3)
+	`, defaultTenantID, "Default", "default")
+	if err != nil {
+		return fmt.Errorf("seed insert tenant: %w", err)
+	}
+
+	slog.Info("seeded default tenant", "subdomain", "default")
+	return nil
+}
+
+// seedAdminUser creates a default admin if no users exist.
+// The admin is marked as super_admin and assigned to the default tenant.
 func seedAdminUser(db *sql.DB) error {
 	var count int
 	if err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count); err != nil {
@@ -45,26 +78,76 @@ func seedAdminUser(db *sql.DB) error {
 		return fmt.Errorf("seed bcrypt: %w", err)
 	}
 
-	_, err = db.Exec(`
-		INSERT INTO users (email, password_hash, display_name, role, totp_enabled)
+	// Create the user (no role column — role is per-tenant in user_tenants).
+	var userID string
+	err = db.QueryRow(`
+		INSERT INTO users (email, password_hash, display_name, is_super_admin, totp_enabled)
 		VALUES ($1, $2, $3, $4, $5)
-	`, "admin@yaaicms.local", string(hash), "Admin", "admin", false)
+		RETURNING id
+	`, "admin@yaaicms.local", string(hash), "Admin", true, false).Scan(&userID)
 	if err != nil {
 		return fmt.Errorf("seed insert admin: %w", err)
+	}
+
+	// Assign the admin to the default tenant with admin role.
+	_, err = db.Exec(`
+		INSERT INTO user_tenants (user_id, tenant_id, role)
+		VALUES ($1, $2, $3)
+	`, userID, defaultTenantID, "admin")
+	if err != nil {
+		return fmt.Errorf("seed assign admin to tenant: %w", err)
 	}
 
 	slog.Info("database seeded with default admin user",
 		"email", "admin@yaaicms.local",
 		"password", "admin",
+		"is_super_admin", true,
 	)
 	return nil
 }
 
-// seedTemplates creates a minimal set of active templates (header, footer,
-// page, article_loop) so the public site works immediately after setup.
+// seedSiteSettings creates default site settings for the default tenant
+// if none exist. The migration (00013) created global settings, but after
+// multi-tenancy, settings are per-tenant.
+func seedSiteSettings(db *sql.DB) error {
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM site_settings WHERE tenant_id = $1", defaultTenantID).Scan(&count); err != nil {
+		return fmt.Errorf("check site settings: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+
+	defaults := map[string]string{
+		"site_title":     "My Website",
+		"site_tagline":   "Just another SmartPress site",
+		"timezone":       "UTC",
+		"language":       "en",
+		"date_format":    "2006-01-02",
+		"posts_per_page": "10",
+		"site_url":       "",
+	}
+
+	for key, value := range defaults {
+		_, err := db.Exec(`
+			INSERT INTO site_settings (tenant_id, key, value)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (tenant_id, key) DO NOTHING
+		`, defaultTenantID, key, value)
+		if err != nil {
+			return fmt.Errorf("seed setting %q: %w", key, err)
+		}
+	}
+
+	slog.Info("seeded default site settings", "tenant", "default")
+	return nil
+}
+
+// seedTemplates creates a minimal set of active templates for the default
+// tenant so the public site works immediately after setup.
 func seedTemplates(db *sql.DB) error {
 	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM templates").Scan(&count); err != nil {
+	if err := db.QueryRow("SELECT COUNT(*) FROM templates WHERE tenant_id = $1", defaultTenantID).Scan(&count); err != nil {
 		return fmt.Errorf("check templates: %w", err)
 	}
 	if count > 0 {
@@ -79,7 +162,7 @@ func seedTemplates(db *sql.DB) error {
 			tmplType: "header",
 			html: `<header class="bg-white border-b border-gray-200">
   <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-    <a href="/" class="text-xl font-bold text-indigo-600">YaaiCMS</a>
+    <a href="/" class="text-xl font-bold text-indigo-600">{{ .SiteName }}</a>
     <nav class="space-x-4 text-sm text-gray-600">
       <a href="/" class="hover:text-gray-900">Home</a>
     </nav>
@@ -91,7 +174,7 @@ func seedTemplates(db *sql.DB) error {
 			tmplType: "footer",
 			html: `<footer class="bg-gray-50 border-t border-gray-200 mt-12">
   <div class="max-w-5xl mx-auto px-4 py-6 text-center text-sm text-gray-500">
-    &copy; {{ .Year }} YaaiCMS. All rights reserved.
+    &copy; {{ .Year }} {{ .SiteName }}. All rights reserved.
   </div>
 </footer>`,
 		},
@@ -151,9 +234,9 @@ func seedTemplates(db *sql.DB) error {
 
 	for _, t := range templates {
 		_, err := db.Exec(`
-			INSERT INTO templates (name, type, html_content, version, is_active)
-			VALUES ($1, $2, $3, 1, true)
-		`, t.name, t.tmplType, t.html)
+			INSERT INTO templates (tenant_id, name, type, html_content, version, is_active)
+			VALUES ($1, $2, $3, $4, 1, true)
+		`, defaultTenantID, t.name, t.tmplType, t.html)
 		if err != nil {
 			return fmt.Errorf("insert template %q: %w", t.name, err)
 		}
@@ -163,11 +246,11 @@ func seedTemplates(db *sql.DB) error {
 	return nil
 }
 
-// seedContent creates a sample homepage and blog post so the public site
-// renders meaningful content right after setup.
+// seedContent creates a sample homepage and blog post for the default tenant
+// so the public site renders meaningful content right after setup.
 func seedContent(db *sql.DB) error {
 	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM content").Scan(&count); err != nil {
+	if err := db.QueryRow("SELECT COUNT(*) FROM content WHERE tenant_id = $1", defaultTenantID).Scan(&count); err != nil {
 		return fmt.Errorf("check content: %w", err)
 	}
 	if count > 0 {
@@ -186,9 +269,9 @@ func seedContent(db *sql.DB) error {
 	}{
 		{
 			contentType: "page",
-			title:       "Welcome to YaaiCMS",
+			title:       "Welcome to SmartPress",
 			slug:        "home",
-			body:        `<p>This is your new YaaiCMS site. Edit this page from the <a href="/admin">admin panel</a>, or create AI-powered templates to customize the look and feel.</p>`,
+			body:        `<p>This is your new SmartPress site. Edit this page from the <a href="/admin">admin panel</a>, or create AI-powered templates to customize the look and feel.</p>`,
 			status:      "published",
 			published:   true,
 		},
@@ -197,7 +280,7 @@ func seedContent(db *sql.DB) error {
 			title:       "Hello World",
 			slug:        "hello-world",
 			body:        `<p>This is a sample blog post created during setup. You can edit or delete it from the admin panel.</p>`,
-			excerpt:     "A sample blog post to get you started with YaaiCMS.",
+			excerpt:     "A sample blog post to get you started with SmartPress.",
 			status:      "published",
 			published:   true,
 		},
@@ -215,9 +298,9 @@ func seedContent(db *sql.DB) error {
 		}
 
 		_, err := db.Exec(fmt.Sprintf(`
-			INSERT INTO content (type, title, slug, body, excerpt, status, author_id, published_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, %s)
-		`, publishedAt), p.contentType, p.title, p.slug, p.body, excerpt, p.status, authorID)
+			INSERT INTO content (tenant_id, type, title, slug, body, excerpt, status, author_id, published_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, %s)
+		`, publishedAt), defaultTenantID, p.contentType, p.title, p.slug, p.body, excerpt, p.status, authorID)
 		if err != nil {
 			return fmt.Errorf("insert content %q: %w", p.slug, err)
 		}

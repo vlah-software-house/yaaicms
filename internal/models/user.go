@@ -22,21 +22,18 @@ const (
 )
 
 // User represents a CMS user with authentication and 2FA fields.
+// In multi-tenant mode, a user's role is per-tenant (stored in user_tenants).
+// The IsSuperAdmin flag grants platform-wide access to manage all tenants.
 type User struct {
 	ID           uuid.UUID `json:"id"`
 	Email        string    `json:"email"`
 	PasswordHash string    `json:"-"` // Never serialize the hash
 	DisplayName  string    `json:"display_name"`
-	Role         Role      `json:"role"`
+	IsSuperAdmin bool      `json:"is_super_admin"`
 	TOTPSecret   *string   `json:"-"` // Nullable; set during 2FA setup
 	TOTPEnabled  bool      `json:"totp_enabled"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
-}
-
-// IsAdmin returns true if the user has the admin role.
-func (u *User) IsAdmin() bool {
-	return u.Role == RoleAdmin
 }
 
 // Needs2FASetup returns true if the user has not completed 2FA enrollment.

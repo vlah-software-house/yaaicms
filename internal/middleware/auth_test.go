@@ -19,11 +19,12 @@ import (
 // It populates every field so assertions can check them.
 func newTestSession(role string, twoFADone bool) *session.Data {
 	return &session.Data{
-		UserID:      uuid.New(),
-		Email:       "test@yaaicms.local",
-		DisplayName: "Test User",
-		Role:        role,
-		TwoFADone:   twoFADone,
+		UserID:       uuid.New(),
+		Email:        "test@yaaicms.local",
+		DisplayName:  "Test User",
+		IsSuperAdmin: role == "admin",
+		TenantRole:   role,
+		TwoFADone:    twoFADone,
 	}
 }
 
@@ -58,8 +59,8 @@ func TestSessionFromCtx(t *testing.T) {
 		if got.Email != sess.Email {
 			t.Errorf("Email: got %q, want %q", got.Email, sess.Email)
 		}
-		if got.Role != sess.Role {
-			t.Errorf("Role: got %q, want %q", got.Role, sess.Role)
+		if got.TenantRole != sess.TenantRole {
+			t.Errorf("TenantRole: got %q, want %q", got.TenantRole, sess.TenantRole)
 		}
 		if got.TwoFADone != sess.TwoFADone {
 			t.Errorf("TwoFADone: got %v, want %v", got.TwoFADone, sess.TwoFADone)

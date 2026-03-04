@@ -95,6 +95,7 @@ func main() {
 	}
 
 	// Initialize data stores.
+	tenantStore := store.NewTenantStore(db)
 	userStore := store.NewUserStore(db)
 	contentStore := store.NewContentStore(db)
 	templateStore := store.NewTemplateStore(db)
@@ -173,9 +174,10 @@ func main() {
 	adminHandlers := handlers.NewAdmin(renderer, sessionStore, contentStore, userStore, templateStore, mediaStore, variantStore, revisionStore, templateRevisionStore, themeStore, siteSettingStore, categoryStore, storageClient, eng, pageCache, cacheLogStore, aiRegistry, aiCfg)
 	authHandlers := handlers.NewAuth(renderer, sessionStore, userStore)
 	publicHandlers := handlers.NewPublic(eng, contentStore, mediaStore, variantStore, storageClient, pageCache)
+	tenantHandlers := handlers.NewTenantAdmin(renderer, sessionStore, tenantStore, userStore)
 
 	// Set up the Chi router with all middleware and routes.
-	r := router.New(sessionStore, adminHandlers, authHandlers, publicHandlers, secureCookies)
+	r := router.New(sessionStore, adminHandlers, authHandlers, publicHandlers, tenantHandlers, tenantStore, valkeyClient, cfg.BaseDomain, secureCookies)
 
 	// Create the HTTP server with sensible timeouts.
 	// WriteTimeout must accommodate AI endpoints that wait on LLM responses

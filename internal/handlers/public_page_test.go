@@ -73,7 +73,7 @@ func TestHomepageFallback(t *testing.T) {
 	t.Cleanup(func() { cleanContent(t, env.DB, "home") })
 
 	// Create a published page with slug "home".
-	_, err := env.ContentStore.Create(&models.Content{
+	_, err := env.ContentStore.Create(testTenantID, &models.Content{
 		Type:     models.ContentTypePage,
 		Title:    "Home Page",
 		Slug:     "home",
@@ -122,7 +122,7 @@ func TestPageNotFound(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	// Ensure nothing is cached for this slug.
-	env.PageCache.InvalidatePage(req.Context(), cache.SlugKey(slug))
+	env.PageCache.InvalidatePage(req.Context(), cache.SlugKey(testTenantID.String(), slug))
 
 	env.Public.Page(rec, req)
 
@@ -149,7 +149,7 @@ func TestPagePublished(t *testing.T) {
 	})
 
 	// Create a published page.
-	_, err := env.ContentStore.Create(&models.Content{
+	_, err := env.ContentStore.Create(testTenantID, &models.Content{
 		Type:     models.ContentTypePage,
 		Title:    "Test Published Page",
 		Slug:     slug,
@@ -162,7 +162,7 @@ func TestPagePublished(t *testing.T) {
 	}
 
 	// Create and activate a page template.
-	tmpl, err := env.TemplateStore.Create(&models.Template{
+	tmpl, err := env.TemplateStore.Create(testTenantID, &models.Template{
 		Name:        tmplName,
 		Type:        models.TemplateTypePage,
 		HTMLContent: `<html><head><title>{{.Title}}</title></head><body>{{.Body}}</body></html>`,
@@ -170,7 +170,7 @@ func TestPagePublished(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create template: %v", err)
 	}
-	if err := env.TemplateStore.Activate(tmpl.ID); err != nil {
+	if err := env.TemplateStore.Activate(testTenantID, tmpl.ID); err != nil {
 		t.Fatalf("activate template: %v", err)
 	}
 
@@ -182,7 +182,7 @@ func TestPagePublished(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	// Ensure L2 cache is clear for this slug.
-	env.PageCache.InvalidatePage(req.Context(), cache.SlugKey(slug))
+	env.PageCache.InvalidatePage(req.Context(), cache.SlugKey(testTenantID.String(), slug))
 
 	env.Public.Page(rec, req)
 
@@ -215,7 +215,7 @@ func TestPageDraftNotVisible(t *testing.T) {
 	t.Cleanup(func() { cleanContent(t, env.DB, slug) })
 
 	// Create a draft page.
-	_, err := env.ContentStore.Create(&models.Content{
+	_, err := env.ContentStore.Create(testTenantID, &models.Content{
 		Type:     models.ContentTypePage,
 		Title:    "Draft Page Should Be Hidden",
 		Slug:     slug,
@@ -232,7 +232,7 @@ func TestPageDraftNotVisible(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	// Ensure L2 cache is clear for this slug.
-	env.PageCache.InvalidatePage(req.Context(), cache.SlugKey(slug))
+	env.PageCache.InvalidatePage(req.Context(), cache.SlugKey(testTenantID.String(), slug))
 
 	env.Public.Page(rec, req)
 
@@ -250,7 +250,7 @@ func TestHomepageCacheHit(t *testing.T) {
 	cachedHTML := `<!DOCTYPE html><html><body><h1>Cached Homepage</h1></body></html>`
 
 	ctx := context.Background()
-	env.PageCache.Set(ctx, cache.HomepageKey(), []byte(cachedHTML))
+	env.PageCache.Set(ctx, cache.HomepageKey(testTenantID.String()), []byte(cachedHTML))
 	t.Cleanup(func() { env.PageCache.InvalidateHomepage(ctx) })
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

@@ -72,12 +72,26 @@ func Require2FA(next http.Handler) http.Handler {
 	})
 }
 
-// RequireAdmin returns 403 if the authenticated user is not an admin.
+// RequireAdmin returns 403 if the authenticated user is not a tenant admin.
 // Must be applied after RequireAuth and Require2FA.
 func RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sess := SessionFromCtx(r.Context())
-		if sess == nil || sess.Role != "admin" {
+		if sess == nil || (sess.TenantRole != "admin" && !sess.IsSuperAdmin) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// RequireSuperAdmin returns 403 if the authenticated user is not a platform super admin.
+// Used for tenant management routes.
+func RequireSuperAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sess := SessionFromCtx(r.Context())
+		if sess == nil || !sess.IsSuperAdmin {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}

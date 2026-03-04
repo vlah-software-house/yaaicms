@@ -12,6 +12,9 @@ import (
 	"yaaicms/internal/models"
 )
 
+// testTemplateTenantID is a fixed tenant ID used across template store tests.
+var testTemplateTenantID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
 func TestTemplateStoreCreateAndFind(t *testing.T) {
 	db := testDB(t)
 	s := NewTemplateStore(db)
@@ -25,7 +28,7 @@ func TestTemplateStoreCreateAndFind(t *testing.T) {
 		HTMLContent: "<h1>{{.Title}}</h1>",
 	}
 
-	created, err := s.Create(tmpl)
+	created, err := s.Create(testTemplateTenantID, tmpl)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -69,7 +72,7 @@ func TestTemplateStoreUpdate(t *testing.T) {
 	name := "Update Template " + uuid.NewString()[:8]
 	t.Cleanup(func() { cleanTemplates(t, db, name, "Renamed Template") })
 
-	created, _ := s.Create(&models.Template{
+	created, _ := s.Create(testTemplateTenantID, &models.Template{
 		Name: name, Type: models.TemplateTypeHeader,
 		HTMLContent: "<header>old</header>",
 	})
@@ -98,21 +101,21 @@ func TestTemplateStoreActivate(t *testing.T) {
 	name2 := "Activate B " + uuid.NewString()[:8]
 	t.Cleanup(func() { cleanTemplates(t, db, name1, name2) })
 
-	a, _ := s.Create(&models.Template{
+	a, _ := s.Create(testTemplateTenantID, &models.Template{
 		Name: name1, Type: models.TemplateTypeFooter,
 		HTMLContent: "<footer>A</footer>",
 	})
-	b, _ := s.Create(&models.Template{
+	b, _ := s.Create(testTemplateTenantID, &models.Template{
 		Name: name2, Type: models.TemplateTypeFooter,
 		HTMLContent: "<footer>B</footer>",
 	})
 
 	// Activate A.
-	if err := s.Activate(a.ID); err != nil {
+	if err := s.Activate(testTemplateTenantID, a.ID); err != nil {
 		t.Fatalf("Activate A: %v", err)
 	}
 
-	active, _ := s.FindActiveByType(models.TemplateTypeFooter)
+	active, _ := s.FindActiveByType(testTemplateTenantID, models.TemplateTypeFooter)
 	if active == nil {
 		t.Fatal("expected active footer template")
 	}
@@ -121,11 +124,11 @@ func TestTemplateStoreActivate(t *testing.T) {
 	}
 
 	// Activate B — should deactivate A.
-	if err := s.Activate(b.ID); err != nil {
+	if err := s.Activate(testTemplateTenantID, b.ID); err != nil {
 		t.Fatalf("Activate B: %v", err)
 	}
 
-	active, _ = s.FindActiveByType(models.TemplateTypeFooter)
+	active, _ = s.FindActiveByType(testTemplateTenantID, models.TemplateTypeFooter)
 	if active.ID != b.ID {
 		t.Errorf("expected B to be active after switch, got %s", active.ID)
 	}
@@ -143,7 +146,7 @@ func TestTemplateStoreDeleteInactive(t *testing.T) {
 
 	name := "Delete Me " + uuid.NewString()[:8]
 
-	created, _ := s.Create(&models.Template{
+	created, _ := s.Create(testTemplateTenantID, &models.Template{
 		Name: name, Type: models.TemplateTypePage,
 		HTMLContent: "<p>delete</p>",
 	})
@@ -170,12 +173,12 @@ func TestTemplateStoreDeleteActiveBlocked(t *testing.T) {
 		cleanTemplates(t, db, name)
 	})
 
-	created, _ := s.Create(&models.Template{
+	created, _ := s.Create(testTemplateTenantID, &models.Template{
 		Name: name, Type: models.TemplateTypeHeader,
 		HTMLContent: "<header>nodelet</header>",
 	})
 
-	s.Activate(created.ID)
+	s.Activate(testTemplateTenantID, created.ID)
 
 	// Delete active — should fail.
 	err := s.Delete(created.ID)
@@ -192,13 +195,13 @@ func TestTemplateStoreList(t *testing.T) {
 	name := "List Test Template " + uuid.NewString()[:8]
 	t.Cleanup(func() { cleanTemplates(t, db, name) })
 
-	s.Create(&models.Template{
+	s.Create(testTemplateTenantID, &models.Template{
 		Name:        name,
 		Type:        models.TemplateTypeHeader,
 		HTMLContent: "<header>list test</header>",
 	})
 
-	templates, err := s.List()
+	templates, err := s.List(testTemplateTenantID)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -212,7 +215,7 @@ func TestTemplateStoreCount(t *testing.T) {
 	db := testDB(t)
 	s := NewTemplateStore(db)
 
-	count, err := s.Count()
+	count, err := s.Count(testTemplateTenantID)
 	if err != nil {
 		t.Fatalf("Count: %v", err)
 	}
@@ -228,7 +231,7 @@ func TestTemplateStoreFindActiveByTypeNone(t *testing.T) {
 	// Use a type that might not have any active templates.
 	// This test verifies nil is returned, not an error.
 	// (If seed data has active templates, this just verifies the happy path.)
-	result, err := s.FindActiveByType("nonexistent_type")
+	result, err := s.FindActiveByType(testTemplateTenantID, "nonexistent_type")
 	if err != nil {
 		t.Fatalf("FindActiveByType: %v", err)
 	}

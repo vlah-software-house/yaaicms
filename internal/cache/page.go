@@ -100,12 +100,39 @@ func (pc *PageCache) InvalidateAll(ctx context.Context) {
 	}
 }
 
-// HomepageKey returns the cache key for the homepage.
-func HomepageKey() string {
-	return "_homepage"
+// HomepageKey returns the cache key for a tenant's homepage.
+func HomepageKey(tenantID string) string {
+	return tenantID + ":_homepage"
 }
 
-// SlugKey returns the cache key for a content slug.
-func SlugKey(slug string) string {
-	return fmt.Sprintf("%s", slug)
+// SlugKey returns the cache key for a content slug scoped to a tenant.
+func SlugKey(tenantID, slug string) string {
+	return fmt.Sprintf("%s:%s", tenantID, slug)
+}
+
+// InvalidateAllForTenant removes all cached pages for a specific tenant.
+func (pc *PageCache) InvalidateAllForTenant(ctx context.Context, tenantID string) {
+	var cursor uint64
+	var deleted int
+	pattern := pageKeyPrefix + tenantID + ":*"
+	for {
+		keys, nextCursor, err := pc.client.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			slog.Warn("page cache tenant scan error", "error", err)
+			return
+		}
+		if len(keys) > 0 {
+			if err := pc.client.Del(ctx, keys...).Err(); err != nil {
+				slog.Warn("page cache tenant bulk delete error", "error", err)
+			}
+			deleted += len(keys)
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+	if deleted > 0 {
+		slog.Info("page cache cleared for tenant", "tenant_id", tenantID, "deleted", deleted)
+	}
 }

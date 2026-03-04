@@ -204,13 +204,15 @@ func ctxWithSession(ctx context.Context, data *session.Data) context.Context {
 }
 
 // testSession creates a session.Data for testing.
+// The role parameter is used as TenantRole. Pass "admin" for admin tests.
 func testSession(userID uuid.UUID, email, role string, twoFADone bool) *session.Data {
 	return &session.Data{
-		UserID:      userID,
-		Email:       email,
-		DisplayName: "Test User",
-		Role:        role,
-		TwoFADone:   twoFADone,
+		UserID:       userID,
+		Email:        email,
+		DisplayName:  "Test User",
+		IsSuperAdmin: role == "admin",
+		TenantRole:   role,
+		TwoFADone:    twoFADone,
 	}
 }
 

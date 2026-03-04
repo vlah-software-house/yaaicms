@@ -19,6 +19,7 @@ import (
 
 	"github.com/google/uuid"
 
+
 	"yaaicms/internal/markdown"
 	"yaaicms/internal/models"
 	"yaaicms/internal/storage"
@@ -135,24 +136,25 @@ func (e *Engine) InvalidateAllTemplates() {
 }
 
 // RenderPage renders a content item using the active page template,
-// header, and footer. img holds the featured image data including responsive
-// variants (pass nil if none). Returns the complete HTML as a byte slice.
-func (e *Engine) RenderPage(content *models.Content, img *FeaturedImage) ([]byte, error) {
+// header, and footer. tenantID scopes the template lookup to the tenant.
+// img holds the featured image data including responsive variants (pass nil if none).
+// siteName overrides the default site name displayed in templates.
+func (e *Engine) RenderPage(tenantID uuid.UUID, siteName string, content *models.Content, img *FeaturedImage) ([]byte, error) {
 	// Load active templates for each component.
-	header, err := e.renderFragment(models.TemplateTypeHeader, nil)
+	header, err := e.renderFragment(tenantID, models.TemplateTypeHeader, nil)
 	if err != nil {
 		slog.Warn("header template not found or failed", "error", err)
 		header = ""
 	}
 
-	footer, err := e.renderFragment(models.TemplateTypeFooter, nil)
+	footer, err := e.renderFragment(tenantID, models.TemplateTypeFooter, nil)
 	if err != nil {
 		slog.Warn("footer template not found or failed", "error", err)
 		footer = ""
 	}
 
 	// Load the active page template.
-	pageTmpl, err := e.templateStore.FindActiveByType(models.TemplateTypePage)
+	pageTmpl, err := e.templateStore.FindActiveByType(tenantID, models.TemplateTypePage)
 	if err != nil || pageTmpl == nil {
 		return nil, fmt.Errorf("no active page template found")
 	}
@@ -181,7 +183,7 @@ func (e *Engine) RenderPage(content *models.Content, img *FeaturedImage) ([]byte
 	bodyHTML = `<div class="yaaicms-content">` + bodyHTML + `</div>`
 
 	data := PageData{
-		SiteName:    "YaaiCMS",
+		SiteName:    siteName,
 		Title:       content.Title,
 		Body:        template.HTML(bodyHTML),
 		Slug:        content.Slug,
@@ -217,22 +219,23 @@ func (e *Engine) RenderPage(content *models.Content, img *FeaturedImage) ([]byte
 }
 
 // RenderPostList renders the article_loop template with a list of posts.
+// tenantID scopes the template lookup. siteName overrides the default.
 // featuredImages maps content ID strings to their featured image data
 // including responsive variants.
-func (e *Engine) RenderPostList(posts []models.Content, featuredImages map[string]*FeaturedImage) ([]byte, error) {
-	header, err := e.renderFragment(models.TemplateTypeHeader, nil)
+func (e *Engine) RenderPostList(tenantID uuid.UUID, siteName string, posts []models.Content, featuredImages map[string]*FeaturedImage) ([]byte, error) {
+	header, err := e.renderFragment(tenantID, models.TemplateTypeHeader, nil)
 	if err != nil {
 		slog.Warn("header template not found or failed", "error", err)
 		header = ""
 	}
 
-	footer, err := e.renderFragment(models.TemplateTypeFooter, nil)
+	footer, err := e.renderFragment(tenantID, models.TemplateTypeFooter, nil)
 	if err != nil {
 		slog.Warn("footer template not found or failed", "error", err)
 		footer = ""
 	}
 
-	loopTmpl, err := e.templateStore.FindActiveByType(models.TemplateTypeArticleLoop)
+	loopTmpl, err := e.templateStore.FindActiveByType(tenantID, models.TemplateTypeArticleLoop)
 	if err != nil || loopTmpl == nil {
 		return nil, fmt.Errorf("no active article_loop template found")
 	}
@@ -258,7 +261,7 @@ func (e *Engine) RenderPostList(posts []models.Content, featuredImages map[strin
 	}
 
 	data := ListData{
-		SiteName: "YaaiCMS",
+		SiteName: siteName,
 		Title:    "Blog",
 		Posts:    postItems,
 		Header:   template.HTML(header),
@@ -292,8 +295,8 @@ func (e *Engine) ValidateAndRender(htmlContent string, data any) ([]byte, error)
 }
 
 // renderFragment loads and renders a template fragment (header or footer).
-func (e *Engine) renderFragment(tmplType models.TemplateType, data any) (string, error) {
-	tmpl, err := e.templateStore.FindActiveByType(tmplType)
+func (e *Engine) renderFragment(tenantID uuid.UUID, tmplType models.TemplateType, data any) (string, error) {
+	tmpl, err := e.templateStore.FindActiveByType(tenantID, tmplType)
 	if err != nil || tmpl == nil {
 		return "", fmt.Errorf("no active %s template", tmplType)
 	}

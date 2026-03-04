@@ -40,16 +40,17 @@ func scanCategory(scanner interface{ Scan(...any) error }) (*models.Category, er
 }
 
 // List returns all categories ordered by sort_order, with post counts.
-func (s *CategoryStore) List() ([]models.Category, error) {
+func (s *CategoryStore) List(tenantID uuid.UUID) ([]models.Category, error) {
 	rows, err := s.db.Query(`
 		SELECT c.id, c.name, c.slug, c.description, c.parent_id, c.sort_order,
 		       c.created_at, c.updated_at,
 		       COUNT(ct.id) AS post_count
 		FROM categories c
 		LEFT JOIN content ct ON ct.category_id = c.id AND ct.type = 'post'
+		WHERE c.tenant_id = $1
 		GROUP BY c.id
 		ORDER BY c.sort_order, c.name
-	`)
+	`, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("list categories: %w", err)
 	}
@@ -72,8 +73,8 @@ func (s *CategoryStore) List() ([]models.Category, error) {
 }
 
 // Tree returns categories as a nested tree structure.
-func (s *CategoryStore) Tree() ([]models.Category, error) {
-	flat, err := s.List()
+func (s *CategoryStore) Tree(tenantID uuid.UUID) ([]models.Category, error) {
+	flat, err := s.List(tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -106,8 +107,8 @@ func ptrEqual(a, b *uuid.UUID) bool {
 
 // FlatTree returns categories as a flat list ordered for display,
 // with Depth set for indentation. Useful for <select> dropdowns.
-func (s *CategoryStore) FlatTree() ([]models.Category, error) {
-	tree, err := s.Tree()
+func (s *CategoryStore) FlatTree(tenantID uuid.UUID) ([]models.Category, error) {
+	tree, err := s.Tree(tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -140,12 +141,12 @@ func (s *CategoryStore) FindByID(id uuid.UUID) (*models.Category, error) {
 }
 
 // Create inserts a new category and returns it.
-func (s *CategoryStore) Create(c *models.Category) (*models.Category, error) {
+func (s *CategoryStore) Create(tenantID uuid.UUID, c *models.Category) (*models.Category, error) {
 	row := s.db.QueryRow(`
-		INSERT INTO categories (name, slug, description, parent_id, sort_order)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO categories (tenant_id, name, slug, description, parent_id, sort_order)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING `+categoryColumns,
-		c.Name, c.Slug, c.Description, c.ParentID, c.SortOrder,
+		tenantID, c.Name, c.Slug, c.Description, c.ParentID, c.SortOrder,
 	)
 	result, err := scanCategory(row)
 	if err != nil {
@@ -211,13 +212,13 @@ func (s *CategoryStore) Reorder(items []ReorderItem) error {
 }
 
 // NextSortOrder returns the next sort_order value for a given parent.
-func (s *CategoryStore) NextSortOrder(parentID *uuid.UUID) (int, error) {
+func (s *CategoryStore) NextSortOrder(tenantID uuid.UUID, parentID *uuid.UUID) (int, error) {
 	var maxOrder sql.NullInt64
 	var err error
 	if parentID == nil {
-		err = s.db.QueryRow(`SELECT MAX(sort_order) FROM categories WHERE parent_id IS NULL`).Scan(&maxOrder)
+		err = s.db.QueryRow(`SELECT MAX(sort_order) FROM categories WHERE tenant_id = $1 AND parent_id IS NULL`, tenantID).Scan(&maxOrder)
 	} else {
-		err = s.db.QueryRow(`SELECT MAX(sort_order) FROM categories WHERE parent_id = $1`, *parentID).Scan(&maxOrder)
+		err = s.db.QueryRow(`SELECT MAX(sort_order) FROM categories WHERE tenant_id = $1 AND parent_id = $2`, tenantID, *parentID).Scan(&maxOrder)
 	}
 	if err != nil {
 		return 0, err

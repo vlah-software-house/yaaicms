@@ -35,14 +35,16 @@ const (
 )
 
 // Data holds the session payload stored in Valkey. It contains the
-// authenticated user's identity and 2FA completion status.
+// authenticated user's identity, tenant context, and 2FA completion status.
 type Data struct {
-	UserID      uuid.UUID `json:"user_id"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	Role        string    `json:"role"`
-	TwoFADone   bool      `json:"two_fa_done"`
-	CreatedAt   time.Time `json:"created_at"`
+	UserID       uuid.UUID `json:"user_id"`
+	Email        string    `json:"email"`
+	DisplayName  string    `json:"display_name"`
+	IsSuperAdmin bool      `json:"is_super_admin"`
+	TenantID     uuid.UUID `json:"tenant_id"`     // Active tenant (zero if not yet selected)
+	TenantRole   string    `json:"tenant_role"`    // User's role in the active tenant
+	TwoFADone    bool      `json:"two_fa_done"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // Store manages session lifecycle in Valkey.

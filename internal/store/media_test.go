@@ -12,6 +12,9 @@ import (
 	"yaaicms/internal/models"
 )
 
+// testMediaTenantID is a fixed tenant ID used across media store tests.
+var testMediaTenantID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
 func TestMediaStoreCreateAndFind(t *testing.T) {
 	db := testDB(t)
 	s := NewMediaStore(db)
@@ -35,7 +38,7 @@ func TestMediaStoreCreateAndFind(t *testing.T) {
 		UploaderID:   uploaderID,
 	}
 
-	created, err := s.Create(media)
+	created, err := s.Create(testMediaTenantID, media)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -82,16 +85,16 @@ func TestMediaStoreList(t *testing.T) {
 	key2 := "media/test/list-" + uuid.NewString()[:8] + ".png"
 	t.Cleanup(func() { cleanMediaByKey(t, db, key1, key2) })
 
-	s.Create(&models.Media{
+	s.Create(testMediaTenantID, &models.Media{
 		Filename: "a.jpg", OriginalName: "a.jpg", ContentType: "image/jpeg",
 		SizeBytes: 100, Bucket: "public", S3Key: key1, UploaderID: uploaderID,
 	})
-	s.Create(&models.Media{
+	s.Create(testMediaTenantID, &models.Media{
 		Filename: "b.png", OriginalName: "b.png", ContentType: "image/png",
 		SizeBytes: 200, Bucket: "public", S3Key: key2, UploaderID: uploaderID,
 	})
 
-	items, err := s.List(10, 0)
+	items, err := s.List(testMediaTenantID, 10, 0)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -100,7 +103,7 @@ func TestMediaStoreList(t *testing.T) {
 	}
 
 	// Pagination: limit 1.
-	items, err = s.List(1, 0)
+	items, err = s.List(testMediaTenantID, 1, 0)
 	if err != nil {
 		t.Fatalf("List(1,0): %v", err)
 	}
@@ -120,7 +123,7 @@ func TestMediaStoreDelete(t *testing.T) {
 
 	key := "media/test/del-" + uuid.NewString()[:8] + ".jpg"
 
-	s.Create(&models.Media{
+	s.Create(testMediaTenantID, &models.Media{
 		Filename: "del.jpg", OriginalName: "del.jpg", ContentType: "image/jpeg",
 		SizeBytes: 100, Bucket: "public", S3Key: key, UploaderID: uploaderID,
 	})
@@ -157,7 +160,7 @@ func TestMediaStoreCount(t *testing.T) {
 	db := testDB(t)
 	s := NewMediaStore(db)
 
-	count, err := s.Count()
+	count, err := s.Count(testMediaTenantID)
 	if err != nil {
 		t.Fatalf("Count: %v", err)
 	}

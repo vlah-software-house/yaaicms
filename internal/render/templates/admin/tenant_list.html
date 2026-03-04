@@ -1,0 +1,91 @@
+{{/* Copyright (c) 2026 Madalin Gabriel Ignisca <hi@madalin.me> */}}
+{{/* Copyright (c) 2026 Vlah Software House SRL <contact@vlah.sh> */}}
+{{/* All rights reserved. See LICENSE for details. */}}
+{{define "title"}}Tenants{{end}}
+
+{{define "content"}}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-xl font-semibold text-gray-900">Tenants</h2>
+            <p class="mt-1 text-sm text-gray-500">Manage platform tenants (sites).</p>
+        </div>
+        <a href="/admin/tenants/new"
+           hx-get="/admin/tenants/new"
+           hx-target="#main-content"
+           hx-push-url="true"
+           class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 transition-colors">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            New Tenant
+        </a>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subdomain</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {{if and .Data .Data.Tenants}}
+                {{range .Data.Tenants}}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <div class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                                <span class="text-sm font-medium text-indigo-600">{{slice .Name 0 1}}</span>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900">{{.Name}}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <code class="text-sm text-gray-600 bg-gray-100 px-2 py-0.5 rounded">{{.Subdomain}}</code>
+                    </td>
+                    <td class="px-6 py-4">
+                        {{if .IsActive}}
+                        <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">Active</span>
+                        {{else}}
+                        <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">Inactive</span>
+                        {{end}}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        {{.CreatedAt.Format "Jan 2, 2006"}}
+                    </td>
+                    <td class="px-6 py-4 text-right text-sm space-x-3">
+                        <a href="/admin/tenants/{{.ID}}/users"
+                           hx-get="/admin/tenants/{{.ID}}/users"
+                           hx-target="#main-content"
+                           hx-push-url="true"
+                           class="text-indigo-600 hover:text-indigo-800">Users</a>
+                        <a href="/admin/tenants/{{.ID}}"
+                           hx-get="/admin/tenants/{{.ID}}"
+                           hx-target="#main-content"
+                           hx-push-url="true"
+                           class="text-indigo-600 hover:text-indigo-800">Edit</a>
+                        <button hx-delete="/admin/tenants/{{.ID}}"
+                                hx-confirm="Delete tenant '{{.Name}}'? This will remove all associated data."
+                                class="text-red-600 hover:text-red-800">Delete</button>
+                    </td>
+                </tr>
+                {{end}}
+                {{else}}
+                <tr>
+                    <td colspan="5" class="px-6 py-12 text-center text-sm text-gray-500">
+                        No tenants found. Create your first tenant to get started.
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}

@@ -1,0 +1,74 @@
+{{/* Copyright (c) 2026 Madalin Gabriel Ignisca <hi@madalin.me> */}}
+{{/* Copyright (c) 2026 Vlah Software House SRL <contact@vlah.sh> */}}
+{{/* All rights reserved. See LICENSE for details. */}}
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Tenant — YaaiCMS</title>
+    {{if isDev}}
+    <script src="https://cdn.tailwindcss.com"></script>
+    {{else}}
+    <link rel="stylesheet" href="/static/css/admin.css">
+    {{end}}
+</head>
+<body class="h-full">
+    <div class="min-h-full flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="w-full max-w-md space-y-8">
+            <div class="text-center">
+                <h1 class="text-3xl font-bold tracking-tight text-gray-900">
+                    <span class="text-indigo-600">Yaai</span>CMS
+                </h1>
+                <h2 class="mt-4 text-xl font-semibold text-gray-900">Select a Tenant</h2>
+                <p class="mt-2 text-sm text-gray-600">You belong to multiple tenants. Choose which one to work in.</p>
+            </div>
+
+            <div class="space-y-3">
+                {{if and .Data .Data.Tenants}}
+                {{range .Data.Tenants}}
+                <form method="POST" action="/admin/select-tenant">
+                    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                    <input type="hidden" name="tenant_id" value="{{.Tenant.ID}}">
+                    <button type="submit"
+                            class="w-full flex items-center justify-between rounded-lg border border-gray-200 bg-white px-6 py-4 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all group">
+                        <div class="flex items-center gap-4">
+                            <div class="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                                <span class="text-lg font-semibold text-indigo-600">{{slice .Tenant.Name 0 1}}</span>
+                            </div>
+                            <div class="text-left">
+                                <p class="text-sm font-semibold text-gray-900 group-hover:text-indigo-600">{{.Tenant.Name}}</p>
+                                <p class="text-xs text-gray-500">
+                                    <code>{{.Tenant.Subdomain}}</code>
+                                    <span class="mx-1">&middot;</span>
+                                    {{if eq (printf "%s" .Role) "admin"}}
+                                    <span class="text-purple-600">admin</span>
+                                    {{else if eq (printf "%s" .Role) "editor"}}
+                                    <span class="text-blue-600">editor</span>
+                                    {{else}}
+                                    <span class="text-gray-600">author</span>
+                                    {{end}}
+                                </p>
+                            </div>
+                        </div>
+                        <svg class="h-5 w-5 text-gray-400 group-hover:text-indigo-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                        </svg>
+                    </button>
+                </form>
+                {{end}}
+                {{else}}
+                <p class="text-center text-sm text-gray-500">No tenants available.</p>
+                {{end}}
+            </div>
+
+            <div class="text-center">
+                <form method="POST" action="/admin/logout">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">Sign out</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

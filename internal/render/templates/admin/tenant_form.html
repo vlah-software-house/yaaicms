@@ -1,0 +1,106 @@
+{{/* Copyright (c) 2026 Madalin Gabriel Ignisca <hi@madalin.me> */}}
+{{/* Copyright (c) 2026 Vlah Software House SRL <contact@vlah.sh> */}}
+{{/* All rights reserved. See LICENSE for details. */}}
+{{define "title"}}{{if .Data.IsNew}}New Tenant{{else}}Edit Tenant{{end}}{{end}}
+
+{{define "content"}}
+<div class="max-w-2xl">
+    <div class="mb-6">
+        <a href="/admin/tenants"
+           hx-get="/admin/tenants"
+           hx-target="#main-content"
+           hx-push-url="true"
+           class="text-sm text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+            </svg>
+            Back to Tenants
+        </a>
+    </div>
+
+    {{if .Data.Error}}
+    <div class="mb-4 rounded-md bg-red-50 p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-red-700">{{.Data.Error}}</p>
+            </div>
+        </div>
+    </div>
+    {{end}}
+
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">
+                {{if .Data.IsNew}}Create New Tenant{{else}}Edit Tenant{{end}}
+            </h2>
+        </div>
+
+        <form method="POST"
+              {{if .Data.IsNew}}
+              action="/admin/tenants"
+              hx-post="/admin/tenants"
+              {{else}}
+              action="/admin/tenants/{{.Data.Tenant.ID}}"
+              hx-put="/admin/tenants/{{.Data.Tenant.ID}}"
+              {{end}}
+              hx-target="#main-content"
+              class="p-6 space-y-6">
+
+            <div>
+                <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
+                <input type="text" name="name" id="name"
+                       value="{{if .Data.Name}}{{.Data.Name}}{{end}}"
+                       required
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                       placeholder="My Blog">
+                <p class="mt-1 text-xs text-gray-500">Display name for this tenant/site.</p>
+            </div>
+
+            {{if .Data.IsNew}}
+            <div>
+                <label for="subdomain" class="block text-sm font-medium text-gray-700">Subdomain</label>
+                <input type="text" name="subdomain" id="subdomain"
+                       value="{{if .Data.Subdomain}}{{.Data.Subdomain}}{{end}}"
+                       required pattern="[a-z0-9][a-z0-9-]*[a-z0-9]"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                       placeholder="my-blog">
+                <p class="mt-1 text-xs text-gray-500">Lowercase letters, numbers, and hyphens only. Cannot be changed after creation.</p>
+            </div>
+            {{else}}
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Subdomain</label>
+                <p class="mt-1 text-sm text-gray-900">
+                    <code class="bg-gray-100 px-2 py-0.5 rounded">{{.Data.Tenant.Subdomain}}</code>
+                </p>
+                <p class="mt-1 text-xs text-gray-500">Subdomain cannot be changed after creation.</p>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <input type="checkbox" name="is_active" id="is_active"
+                       {{if .Data.Tenant.IsActive}}checked{{end}}
+                       class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                <label for="is_active" class="text-sm font-medium text-gray-700">Active</label>
+                <p class="text-xs text-gray-500">Inactive tenants return 404 for all public pages.</p>
+            </div>
+            {{end}}
+
+            <div class="flex items-center gap-3 pt-4 border-t border-gray-200">
+                <button type="submit"
+                        class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 transition-colors">
+                    {{if .Data.IsNew}}Create Tenant{{else}}Save Changes{{end}}
+                </button>
+                <a href="/admin/tenants"
+                   hx-get="/admin/tenants"
+                   hx-target="#main-content"
+                   hx-push-url="true"
+                   class="text-sm text-gray-600 hover:text-gray-800">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{{end}}

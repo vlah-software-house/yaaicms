@@ -13,6 +13,9 @@ import (
 	"yaaicms/internal/models"
 )
 
+// testContentTenantID is a fixed tenant ID used across content store tests.
+var testContentTenantID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
 // testAuthorID returns a valid user ID for content creation.
 func testAuthorID(t *testing.T, db *sql.DB) uuid.UUID {
 	t.Helper()
@@ -40,7 +43,7 @@ func TestContentStoreCreateAndFind(t *testing.T) {
 		AuthorID: authorID,
 	}
 
-	created, err := s.Create(content)
+	created, err := s.Create(testContentTenantID, content)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -88,7 +91,7 @@ func TestContentStoreCreatePublished(t *testing.T) {
 		AuthorID: authorID,
 	}
 
-	created, err := s.Create(content)
+	created, err := s.Create(testContentTenantID, content)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -107,12 +110,12 @@ func TestContentStoreFindBySlug(t *testing.T) {
 	t.Cleanup(func() { cleanContent(t, db, slug) })
 
 	// Create draft — should NOT be findable by slug.
-	s.Create(&models.Content{
+	s.Create(testContentTenantID, &models.Content{
 		Type: models.ContentTypePost, Title: "Draft", Slug: slug,
 		Body: "draft", Status: models.ContentStatusDraft, AuthorID: authorID,
 	})
 
-	found, err := s.FindBySlug(slug)
+	found, err := s.FindBySlug(testContentTenantID, slug)
 	if err != nil {
 		t.Fatalf("FindBySlug (draft): %v", err)
 	}
@@ -123,7 +126,7 @@ func TestContentStoreFindBySlug(t *testing.T) {
 	// Update to published.
 	db.Exec("UPDATE content SET status = 'published', published_at = NOW() WHERE slug = $1", slug)
 
-	found, err = s.FindBySlug(slug)
+	found, err = s.FindBySlug(testContentTenantID, slug)
 	if err != nil {
 		t.Fatalf("FindBySlug (published): %v", err)
 	}
@@ -135,7 +138,7 @@ func TestContentStoreFindBySlug(t *testing.T) {
 	}
 
 	// Not found.
-	found, _ = s.FindBySlug("nonexistent-slug-xyz")
+	found, _ = s.FindBySlug(testContentTenantID, "nonexistent-slug-xyz")
 	if found != nil {
 		t.Error("expected nil for nonexistent slug")
 	}
@@ -150,20 +153,20 @@ func TestContentStoreListByType(t *testing.T) {
 	slug2 := "test-list-page-" + uuid.NewString()[:8]
 	t.Cleanup(func() { cleanContent(t, db, slug1, slug2) })
 
-	s.Create(&models.Content{
+	s.Create(testContentTenantID, &models.Content{
 		Type: models.ContentTypePost, Title: "List Post", Slug: slug1,
 		Body: "body", Status: models.ContentStatusDraft, AuthorID: authorID,
 	})
-	s.Create(&models.Content{
+	s.Create(testContentTenantID, &models.Content{
 		Type: models.ContentTypePage, Title: "List Page", Slug: slug2,
 		Body: "body", Status: models.ContentStatusDraft, AuthorID: authorID,
 	})
 
-	posts, err := s.ListByType(models.ContentTypePost)
+	posts, err := s.ListByType(testContentTenantID, models.ContentTypePost)
 	if err != nil {
 		t.Fatalf("ListByType(post): %v", err)
 	}
-	pages, err := s.ListByType(models.ContentTypePage)
+	pages, err := s.ListByType(testContentTenantID, models.ContentTypePage)
 	if err != nil {
 		t.Fatalf("ListByType(page): %v", err)
 	}
@@ -184,7 +187,7 @@ func TestContentStoreUpdate(t *testing.T) {
 	slug := "test-update-" + uuid.NewString()[:8]
 	t.Cleanup(func() { cleanContent(t, db, slug) })
 
-	created, _ := s.Create(&models.Content{
+	created, _ := s.Create(testContentTenantID, &models.Content{
 		Type: models.ContentTypePost, Title: "Original", Slug: slug,
 		Body: "original", Status: models.ContentStatusDraft, AuthorID: authorID,
 	})
@@ -216,7 +219,7 @@ func TestContentStoreDelete(t *testing.T) {
 
 	slug := "test-delete-" + uuid.NewString()[:8]
 
-	created, _ := s.Create(&models.Content{
+	created, _ := s.Create(testContentTenantID, &models.Content{
 		Type: models.ContentTypePost, Title: "Delete", Slug: slug,
 		Body: "body", Status: models.ContentStatusDraft, AuthorID: authorID,
 	})
@@ -235,7 +238,7 @@ func TestContentStoreCountByType(t *testing.T) {
 	db := testDB(t)
 	s := NewContentStore(db)
 
-	count, err := s.CountByType(models.ContentTypePost)
+	count, err := s.CountByType(testContentTenantID, models.ContentTypePost)
 	if err != nil {
 		t.Fatalf("CountByType: %v", err)
 	}
@@ -253,12 +256,12 @@ func TestContentStoreListPublishedByType(t *testing.T) {
 	t.Cleanup(func() { cleanContent(t, db, slug) })
 
 	// Create a published post.
-	s.Create(&models.Content{
+	s.Create(testContentTenantID, &models.Content{
 		Type: models.ContentTypePost, Title: "Published", Slug: slug,
 		Body: "body", Status: models.ContentStatusPublished, AuthorID: authorID,
 	})
 
-	published, err := s.ListPublishedByType(models.ContentTypePost)
+	published, err := s.ListPublishedByType(testContentTenantID, models.ContentTypePost)
 	if err != nil {
 		t.Fatalf("ListPublishedByType: %v", err)
 	}

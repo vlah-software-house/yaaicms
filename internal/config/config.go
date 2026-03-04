@@ -68,6 +68,9 @@ type Config struct {
 	MistralModelTemplate string
 	MistralBaseURL      string
 
+	// Multi-tenancy
+	BaseDomain string // e.g. "smartpress.io" — tenants are {subdomain}.smartpress.io
+
 	// S3-compatible object storage (Hetzner CEPH)
 	S3Endpoint      string
 	S3Region        string
@@ -96,6 +99,8 @@ func Load() (*Config, error) {
 		ValkeyHost:     envOrDefault("VALKEY_HOST", "localhost"),
 		ValkeyPort:     envOrDefault("VALKEY_PORT", "6379"),
 		ValkeyPassword: os.Getenv("VALKEY_PASSWORD"),
+
+		BaseDomain: envOrDefault("BASE_DOMAIN", "localhost"),
 
 		AIProvider: envOrDefault("AI_PROVIDER", "gemini"),
 

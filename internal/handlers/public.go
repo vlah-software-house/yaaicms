@@ -16,6 +16,7 @@ import (
 
 	"yaaicms/internal/cache"
 	"yaaicms/internal/engine"
+	"yaaicms/internal/middleware"
 	"yaaicms/internal/models"
 	"yaaicms/internal/storage"
 	"yaaicms/internal/store"
@@ -52,23 +53,30 @@ func NewPublic(eng *engine.Engine, contentStore *store.ContentStore, mediaStore 
 func (p *Public) Homepage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Get tenant from context (set by tenant resolution middleware).
+	tenant := middleware.TenantFromCtx(ctx)
+	if tenant == nil {
+		http.NotFound(w, r)
+		return
+	}
+
 	// Check L2 cache first.
-	if cached, ok := p.pageCache.Get(ctx, cache.HomepageKey()); ok {
+	if cached, ok := p.pageCache.Get(ctx, cache.HomepageKey(tenant.ID.String())); ok {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(cached)
 		return
 	}
 
 	// Try to render a blog-style homepage with the article_loop template.
-	posts, err := p.contentStore.ListPublishedByType(models.ContentTypePost)
+	posts, err := p.contentStore.ListPublishedByType(tenant.ID, models.ContentTypePost)
 	if err != nil {
 		slog.Error("list published posts failed", "error", err)
 	}
 
 	if len(posts) > 0 {
-		rendered, err := p.engine.RenderPostList(posts, p.resolveFeaturedImages(posts))
+		rendered, err := p.engine.RenderPostList(tenant.ID, tenant.Name, posts, p.resolveFeaturedImages(posts))
 		if err == nil {
-			p.pageCache.Set(ctx, cache.HomepageKey(), rendered)
+			p.pageCache.Set(ctx, cache.HomepageKey(tenant.ID.String()), rendered)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Write(rendered)
 			return
@@ -77,11 +85,11 @@ func (p *Public) Homepage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fall back to a "home" page if it exists.
-	home, err := p.contentStore.FindBySlug("home")
+	home, err := p.contentStore.FindBySlug(tenant.ID, "home")
 	if err == nil && home != nil {
-		rendered, err := p.engine.RenderPage(home, p.resolveFeaturedImage(home))
+		rendered, err := p.engine.RenderPage(tenant.ID, tenant.Name, home, p.resolveFeaturedImage(home))
 		if err == nil {
-			p.pageCache.Set(ctx, cache.HomepageKey(), rendered)
+			p.pageCache.Set(ctx, cache.HomepageKey(tenant.ID.String()), rendered)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Write(rendered)
 			return
@@ -107,14 +115,21 @@ func (p *Public) Page(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	slugParam := chi.URLParam(r, "slug")
 
+	// Get tenant from context (set by tenant resolution middleware).
+	tenant := middleware.TenantFromCtx(ctx)
+	if tenant == nil {
+		http.NotFound(w, r)
+		return
+	}
+
 	// Check L2 cache first.
-	if cached, ok := p.pageCache.Get(ctx, cache.SlugKey(slugParam)); ok {
+	if cached, ok := p.pageCache.Get(ctx, cache.SlugKey(tenant.ID.String(), slugParam)); ok {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(cached)
 		return
 	}
 
-	content, err := p.contentStore.FindBySlug(slugParam)
+	content, err := p.contentStore.FindBySlug(tenant.ID, slugParam)
 	if err != nil {
 		slog.Error("find content by slug failed", "error", err, "slug", slugParam)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -126,7 +141,7 @@ func (p *Public) Page(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rendered, err := p.engine.RenderPage(content, p.resolveFeaturedImage(content))
+	rendered, err := p.engine.RenderPage(tenant.ID, tenant.Name, content, p.resolveFeaturedImage(content))
 	if err != nil {
 		slog.Error("render page failed", "error", err, "slug", slugParam)
 		// Fall back to a safe error page when the template engine fails.
@@ -145,7 +160,7 @@ func (p *Public) Page(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store in L2 cache.
-	p.pageCache.Set(ctx, cache.SlugKey(slugParam), rendered)
+	p.pageCache.Set(ctx, cache.SlugKey(tenant.ID.String(), slugParam), rendered)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(rendered)

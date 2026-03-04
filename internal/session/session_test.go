@@ -63,11 +63,12 @@ func TestSessionCreateAndGet(t *testing.T) {
 	ctx := context.Background()
 
 	data := &Data{
-		UserID:      uuid.New(),
-		Email:       "test@session.local",
-		DisplayName: "Test User",
-		Role:        "admin",
-		TwoFADone:   false,
+		UserID:       uuid.New(),
+		Email:        "test@session.local",
+		DisplayName:  "Test User",
+		IsSuperAdmin: true,
+		TenantRole:   "admin",
+		TwoFADone:    false,
 	}
 
 	sessionID, err := store.Create(ctx, w, data)
@@ -116,8 +117,8 @@ func TestSessionCreateAndGet(t *testing.T) {
 	if retrieved.UserID != data.UserID {
 		t.Errorf("userID: got %s, want %s", retrieved.UserID, data.UserID)
 	}
-	if retrieved.Role != "admin" {
-		t.Errorf("role: got %q, want %q", retrieved.Role, "admin")
+	if retrieved.TenantRole != "admin" {
+		t.Errorf("tenant role: got %q, want %q", retrieved.TenantRole, "admin")
 	}
 }
 
@@ -163,7 +164,7 @@ func TestSessionUpdate(t *testing.T) {
 		UserID:      uuid.New(),
 		Email:       "update@session.local",
 		DisplayName: "Update User",
-		Role:        "editor",
+		TenantRole:  "editor",
 		TwoFADone:   false,
 	}
 
@@ -211,7 +212,7 @@ func TestSessionDestroy(t *testing.T) {
 		UserID:      uuid.New(),
 		Email:       "destroy@session.local",
 		DisplayName: "Destroy User",
-		Role:        "admin",
+		TenantRole:  "admin",
 	}
 
 	store.Create(ctx, w, data)
@@ -262,7 +263,7 @@ func TestSessionSecureCookie(t *testing.T) {
 	w := httptest.NewRecorder()
 	store.Create(context.Background(), w, &Data{
 		UserID: uuid.New(), Email: "secure@test.local",
-		DisplayName: "Secure", Role: "admin",
+		DisplayName: "Secure", TenantRole: "admin",
 	})
 
 	cookies := w.Result().Cookies()

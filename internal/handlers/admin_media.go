@@ -62,8 +62,10 @@ func (a *Admin) MediaLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sess := middleware.SessionFromCtx(r.Context())
+
 	page := 0
-	items, _ := a.mediaStore.List(50, page*50)
+	items, _ := a.mediaStore.List(sess.TenantID, 50, page*50)
 
 	// Build URLs for each media item.
 	type mediaView struct {
@@ -101,7 +103,9 @@ func (a *Admin) MediaListJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, _ := a.mediaStore.List(100, 0)
+	sess := middleware.SessionFromCtx(r.Context())
+
+	items, _ := a.mediaStore.List(sess.TenantID, 100, 0)
 
 	type item struct {
 		ID       string `json:"id"`
@@ -247,7 +251,7 @@ func (a *Admin) MediaUpload(w http.ResponseWriter, r *http.Request) {
 		media.AltText = &altText
 	}
 
-	created, err := a.mediaStore.Create(media)
+	created, err := a.mediaStore.Create(sess.TenantID, media)
 	if err != nil {
 		slog.Error("media db insert failed", "error", err, "key", s3Key)
 		writeMediaError(w, "Failed to save file metadata.", http.StatusInternalServerError)
