@@ -26,24 +26,31 @@ import (
 // dynamic template engine. It checks the L2 Valkey page cache before
 // invoking the template engine, and stores rendered results on miss.
 type Public struct {
-	engine        *engine.Engine
-	contentStore  *store.ContentStore
-	mediaStore    *store.MediaStore
-	variantStore  *store.VariantStore
-	storageClient *storage.Client
-	pageCache     *cache.PageCache
+	engine           *engine.Engine
+	contentStore     *store.ContentStore
+	siteSettingStore *store.SiteSettingStore
+	mediaStore       *store.MediaStore
+	variantStore     *store.VariantStore
+	storageClient    *storage.Client
+	pageCache        *cache.PageCache
+	domainResolver   middleware.DomainResolver
+	baseDomain       string
 }
 
 // NewPublic creates a new Public handler group. mediaStore, variantStore,
 // and storageClient may be nil if S3 is not configured.
-func NewPublic(eng *engine.Engine, contentStore *store.ContentStore, mediaStore *store.MediaStore, variantStore *store.VariantStore, storageClient *storage.Client, pageCache *cache.PageCache) *Public {
+// domainResolver and baseDomain are used to compute canonical URLs for SEO meta tags.
+func NewPublic(eng *engine.Engine, contentStore *store.ContentStore, siteSettingStore *store.SiteSettingStore, mediaStore *store.MediaStore, variantStore *store.VariantStore, storageClient *storage.Client, pageCache *cache.PageCache, domainResolver middleware.DomainResolver, baseDomain string) *Public {
 	return &Public{
-		engine:        eng,
-		contentStore:  contentStore,
-		mediaStore:    mediaStore,
-		variantStore:  variantStore,
-		storageClient: storageClient,
-		pageCache:     pageCache,
+		engine:           eng,
+		contentStore:     contentStore,
+		siteSettingStore: siteSettingStore,
+		mediaStore:       mediaStore,
+		variantStore:     variantStore,
+		storageClient:    storageClient,
+		pageCache:        pageCache,
+		domainResolver:   domainResolver,
+		baseDomain:       baseDomain,
 	}
 }
 
@@ -87,7 +94,7 @@ func (p *Public) Homepage(w http.ResponseWriter, r *http.Request) {
 	// Fall back to a "home" page if it exists.
 	home, err := p.contentStore.FindBySlug(tenant.ID, "home")
 	if err == nil && home != nil {
-		rendered, err := p.engine.RenderPage(tenant.ID, tenant.Name, home, p.resolveFeaturedImage(home))
+		rendered, err := p.engine.RenderPage(tenant.ID, tenant.Name, home, p.resolveFeaturedImage(home), p.buildSocialMeta(tenant, home.Type, "/"))
 		if err == nil {
 			p.pageCache.Set(ctx, cache.HomepageKey(tenant.ID.String()), rendered)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -141,7 +148,7 @@ func (p *Public) Page(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rendered, err := p.engine.RenderPage(tenant.ID, tenant.Name, content, p.resolveFeaturedImage(content))
+	rendered, err := p.engine.RenderPage(tenant.ID, tenant.Name, content, p.resolveFeaturedImage(content), p.buildSocialMeta(tenant, content.Type, "/"+content.Slug))
 	if err != nil {
 		slog.Error("render page failed", "error", err, "slug", slugParam)
 		// Fall back to a safe error page when the template engine fails.
@@ -164,6 +171,31 @@ func (p *Public) Page(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(rendered)
+}
+
+// buildSocialMeta constructs the SocialMeta context for a page render.
+// It loads site settings and resolves the canonical URL from the tenant's
+// primary domain (or subdomain fallback).
+func (p *Public) buildSocialMeta(tenant *models.Tenant, contentType models.ContentType, path string) *engine.SocialMeta {
+	settings, err := p.siteSettingStore.All(tenant.ID)
+	if err != nil {
+		slog.Warn("failed to load site settings for social meta", "error", err)
+		settings = make(models.SiteSettings)
+	}
+
+	// Resolve canonical host: primary domain > subdomain.baseDomain.
+	canonicalHost := tenant.Subdomain + "." + p.baseDomain
+	if p.domainResolver != nil {
+		if primary, err := p.domainResolver.FindPrimaryDomain(tenant.ID); err == nil && primary != "" {
+			canonicalHost = primary
+		}
+	}
+
+	return &engine.SocialMeta{
+		CanonicalURL: "https://" + canonicalHost + path,
+		ContentType:  contentType,
+		Settings:     settings,
+	}
 }
 
 // resolveFeaturedImage returns the featured image data (URL, srcset, alt)

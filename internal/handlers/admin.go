@@ -1413,12 +1413,14 @@ func (a *Admin) SettingsSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updates := map[string]string{
-		"site_title":     r.FormValue("site_title"),
-		"site_tagline":   r.FormValue("site_tagline"),
-		"timezone":       r.FormValue("timezone"),
-		"language":       r.FormValue("language"),
-		"date_format":    r.FormValue("date_format"),
-		"posts_per_page": r.FormValue("posts_per_page"),
+		"site_title":        r.FormValue("site_title"),
+		"site_tagline":      r.FormValue("site_tagline"),
+		"timezone":          r.FormValue("timezone"),
+		"language":          r.FormValue("language"),
+		"date_format":       r.FormValue("date_format"),
+		"posts_per_page":    r.FormValue("posts_per_page"),
+		"og_default_image":  r.FormValue("og_default_image"),
+		"twitter_site":      r.FormValue("twitter_site"),
 	}
 
 	sess := middleware.SessionFromCtx(r.Context())

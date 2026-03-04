@@ -162,6 +162,35 @@
                 </div>
             </div>
 
+            <div class="pt-4 border-t border-gray-100">
+                <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">Social & SEO</h3>
+                <p class="text-sm text-gray-500 mb-4">Configure Open Graph and Twitter Card defaults for link previews.</p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <!-- Default OG Image -->
+                <div>
+                    <label for="og_default_image" class="block text-sm font-medium text-gray-700 mb-1">Default OG Image URL</label>
+                    <input type="url" id="og_default_image" name="og_default_image"
+                           value="{{index .Data.Settings "og_default_image"}}"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="https://example.com/og-image.jpg">
+                    <p class="mt-1 text-xs text-gray-400">Fallback image for social previews when content has no featured image.</p>
+                </div>
+
+                <!-- Twitter Handle -->
+                <div>
+                    <label for="twitter_site" class="block text-sm font-medium text-gray-700 mb-1">Twitter Handle</label>
+                    <input type="text" id="twitter_site" name="twitter_site"
+                           value="{{index .Data.Settings "twitter_site"}}"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="@yourhandle">
+                    <p class="mt-1 text-xs text-gray-400">Used in the <code>twitter:site</code> meta tag for Twitter Cards.</p>
+                </div>
+            </div>
+
             <!-- Save button -->
             <div class="flex justify-end pt-4 border-t border-gray-100">
                 <button type="submit"

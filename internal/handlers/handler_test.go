@@ -176,7 +176,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	admin := NewAdmin(renderer, sessions, contentStore, userStore, templateStore,
 		mediaStore, nil, nil, nil, nil, siteSettingStore, categoryStore, nil, eng, pageCache, cacheLogStore, aiRegistry, aiCfg)
 	auth := NewAuth(renderer, sessions, userStore)
-	public := NewPublic(eng, contentStore, nil, nil, nil, pageCache)
+	public := NewPublic(eng, contentStore, siteSettingStore, nil, nil, nil, pageCache, nil, "localhost")
 
 	return &testEnv{
 		DB:            db,

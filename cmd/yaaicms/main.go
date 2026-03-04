@@ -179,8 +179,8 @@ func main() {
 	// Create handler groups with their dependencies.
 	adminHandlers := handlers.NewAdmin(renderer, sessionStore, contentStore, userStore, templateStore, mediaStore, variantStore, revisionStore, templateRevisionStore, themeStore, siteSettingStore, categoryStore, storageClient, eng, pageCache, cacheLogStore, aiRegistry, aiCfg)
 	authHandlers := handlers.NewAuth(renderer, sessionStore, userStore)
-	publicHandlers := handlers.NewPublic(eng, contentStore, mediaStore, variantStore, storageClient, pageCache)
-	tenantHandlers := handlers.NewTenantAdmin(renderer, sessionStore, tenantStore, userStore, domainStore, k8sManager, cfg.BaseDomain)
+	publicHandlers := handlers.NewPublic(eng, contentStore, siteSettingStore, mediaStore, variantStore, storageClient, pageCache, tenantResolver, cfg.BaseDomain)
+	tenantHandlers := handlers.NewTenantAdmin(renderer, sessionStore, tenantStore, userStore, domainStore, k8sManager, valkeyClient, cfg.BaseDomain)
 
 	// Set up the Chi router with all middleware and routes.
 	r := router.New(sessionStore, adminHandlers, authHandlers, publicHandlers, tenantHandlers, tenantStore, tenantResolver, valkeyClient, cfg.BaseDomain, secureCookies)

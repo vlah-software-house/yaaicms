@@ -11,6 +11,7 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
+	"html"
 	"html/template"
 	"log/slog"
 	"regexp"
@@ -18,7 +19,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
 
 	"yaaicms/internal/markdown"
 	"yaaicms/internal/models"
@@ -47,6 +47,14 @@ type FeaturedImage struct {
 	URL    string // Public URL of the original image (or largest variant)
 	Srcset string // Pre-built srcset string: "url_sm.webp 640w, url_md.webp 1024w, ..."
 	Alt    string // Alt text for accessibility
+}
+
+// SocialMeta carries all context needed to generate Open Graph, Twitter Card,
+// and standard SEO meta tags. Passed into RenderPage by the public handler.
+type SocialMeta struct {
+	CanonicalURL string            // Full canonical URL (https://host/slug)
+	ContentType  models.ContentType // "post" or "page" — determines og:type
+	Settings     models.SiteSettings // site_title, site_tagline, og_default_image, twitter_site
 }
 
 // PageData holds all variables available to a page template when rendering
@@ -139,7 +147,8 @@ func (e *Engine) InvalidateAllTemplates() {
 // header, and footer. tenantID scopes the template lookup to the tenant.
 // img holds the featured image data including responsive variants (pass nil if none).
 // siteName overrides the default site name displayed in templates.
-func (e *Engine) RenderPage(tenantID uuid.UUID, siteName string, content *models.Content, img *FeaturedImage) ([]byte, error) {
+// social carries SEO/social meta context; pass nil to skip meta tag injection.
+func (e *Engine) RenderPage(tenantID uuid.UUID, siteName string, content *models.Content, img *FeaturedImage, social *SocialMeta) ([]byte, error) {
 	// Load active templates for each component.
 	header, err := e.renderFragment(tenantID, models.TemplateTypeHeader, nil)
 	if err != nil {
@@ -215,7 +224,14 @@ func (e *Engine) RenderPage(tenantID uuid.UUID, siteName string, content *models
 		return nil, err
 	}
 
-	return injectContentCSS(rendered), nil
+	result := injectContentCSS(rendered)
+
+	// Inject social/SEO meta tags before </head> when social context is provided.
+	if social != nil {
+		result = injectSocialMeta(result, data, social)
+	}
+
+	return result, nil
 }
 
 // RenderPostList renders the article_loop template with a list of posts.
@@ -350,6 +366,108 @@ func injectContentCSS(rendered []byte) []byte {
 	}
 	// No </head> — prepend the style block.
 	return []byte(contentStyleTag + html)
+}
+
+// injectSocialMeta inserts Open Graph, Twitter Card, and standard SEO meta
+// tags before </head> in the rendered HTML.
+func injectSocialMeta(rendered []byte, data PageData, social *SocialMeta) []byte {
+	tags := buildSocialMetaTags(data, social)
+	if tags == "" {
+		return rendered
+	}
+
+	h := string(rendered)
+	if idx := strings.Index(strings.ToLower(h), "</head>"); idx != -1 {
+		return []byte(h[:idx] + tags + h[idx:])
+	}
+	// No </head> — prepend.
+	return []byte(tags + h)
+}
+
+// buildSocialMetaTags generates the full block of Open Graph, Twitter Card,
+// canonical link, and standard SEO meta tags as raw HTML.
+func buildSocialMetaTags(data PageData, social *SocialMeta) string {
+	var b strings.Builder
+
+	esc := html.EscapeString // shorthand for attribute escaping
+
+	// --- Standard SEO ---
+	if social.CanonicalURL != "" {
+		b.WriteString(`<link rel="canonical" href="` + esc(social.CanonicalURL) + `">` + "\n")
+	}
+	if data.MetaDescription != "" {
+		b.WriteString(`<meta name="description" content="` + esc(data.MetaDescription) + `">` + "\n")
+	}
+	if data.MetaKeywords != "" {
+		b.WriteString(`<meta name="keywords" content="` + esc(data.MetaKeywords) + `">` + "\n")
+	}
+
+	// --- Resolve values with fallbacks ---
+	title := data.Title
+	if title == "" {
+		title = social.Settings["site_title"]
+	}
+
+	description := data.MetaDescription
+	if description == "" {
+		description = data.Excerpt
+	}
+	if description == "" {
+		description = social.Settings["site_tagline"]
+	}
+
+	imageURL := data.FeaturedImageURL
+	if imageURL == "" {
+		imageURL = social.Settings["og_default_image"]
+	}
+
+	siteName := social.Settings["site_title"]
+
+	// og:type: "article" for posts, "website" for pages/homepage.
+	ogType := "website"
+	if social.ContentType == models.ContentTypePost {
+		ogType = "article"
+	}
+
+	// --- Open Graph ---
+	b.WriteString(`<meta property="og:title" content="` + esc(title) + `">` + "\n")
+	if description != "" {
+		b.WriteString(`<meta property="og:description" content="` + esc(description) + `">` + "\n")
+	}
+	if imageURL != "" {
+		b.WriteString(`<meta property="og:image" content="` + esc(imageURL) + `">` + "\n")
+	}
+	if social.CanonicalURL != "" {
+		b.WriteString(`<meta property="og:url" content="` + esc(social.CanonicalURL) + `">` + "\n")
+	}
+	b.WriteString(`<meta property="og:type" content="` + ogType + `">` + "\n")
+	if siteName != "" {
+		b.WriteString(`<meta property="og:site_name" content="` + esc(siteName) + `">` + "\n")
+	}
+	if data.PublishedAt != "" && ogType == "article" {
+		b.WriteString(`<meta property="article:published_time" content="` + esc(data.PublishedAt) + `">` + "\n")
+	}
+
+	// --- Twitter Cards ---
+	twitterCard := "summary"
+	if imageURL != "" {
+		twitterCard = "summary_large_image"
+	}
+	b.WriteString(`<meta name="twitter:card" content="` + twitterCard + `">` + "\n")
+
+	twitterSite := social.Settings["twitter_site"]
+	if twitterSite != "" {
+		b.WriteString(`<meta name="twitter:site" content="` + esc(twitterSite) + `">` + "\n")
+	}
+	b.WriteString(`<meta name="twitter:title" content="` + esc(title) + `">` + "\n")
+	if description != "" {
+		b.WriteString(`<meta name="twitter:description" content="` + esc(description) + `">` + "\n")
+	}
+	if imageURL != "" {
+		b.WriteString(`<meta name="twitter:image" content="` + esc(imageURL) + `">` + "\n")
+	}
+
+	return b.String()
 }
 
 // RewriteBodyImages is the exported wrapper for rewriteBodyImages, allowing
