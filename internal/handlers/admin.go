@@ -64,6 +64,7 @@ type Admin struct {
 	themeStore            *store.DesignThemeStore
 	siteSettingStore      *store.SiteSettingStore
 	categoryStore         *store.CategoryStore
+	menuStore             *store.MenuStore
 	storageClient         *storage.Client
 	engine                *engine.Engine
 	pageCache             *cache.PageCache
@@ -74,7 +75,7 @@ type Admin struct {
 
 // NewAdmin creates a new Admin handler group with the given dependencies.
 // storageClient, mediaStore, and variantStore may be nil if S3 is not configured.
-func NewAdmin(renderer *render.Renderer, sessions *session.Store, contentStore *store.ContentStore, userStore *store.UserStore, templateStore *store.TemplateStore, mediaStore *store.MediaStore, variantStore *store.VariantStore, revisionStore *store.RevisionStore, templateRevisionStore *store.TemplateRevisionStore, themeStore *store.DesignThemeStore, siteSettingStore *store.SiteSettingStore, categoryStore *store.CategoryStore, storageClient *storage.Client, eng *engine.Engine, pageCache *cache.PageCache, cacheLog *store.CacheLogStore, aiRegistry *ai.Registry, aiCfg *AIConfig) *Admin {
+func NewAdmin(renderer *render.Renderer, sessions *session.Store, contentStore *store.ContentStore, userStore *store.UserStore, templateStore *store.TemplateStore, mediaStore *store.MediaStore, variantStore *store.VariantStore, revisionStore *store.RevisionStore, templateRevisionStore *store.TemplateRevisionStore, themeStore *store.DesignThemeStore, siteSettingStore *store.SiteSettingStore, categoryStore *store.CategoryStore, menuStore *store.MenuStore, storageClient *storage.Client, eng *engine.Engine, pageCache *cache.PageCache, cacheLog *store.CacheLogStore, aiRegistry *ai.Registry, aiCfg *AIConfig) *Admin {
 	return &Admin{
 		renderer:              renderer,
 		sessions:              sessions,
@@ -88,6 +89,7 @@ func NewAdmin(renderer *render.Renderer, sessions *session.Store, contentStore *
 		themeStore:            themeStore,
 		siteSettingStore:      siteSettingStore,
 		categoryStore:         categoryStore,
+		menuStore:             menuStore,
 		storageClient:         storageClient,
 		engine:                eng,
 		pageCache:             pageCache,

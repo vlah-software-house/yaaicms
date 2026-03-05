@@ -147,6 +147,16 @@ func New(sessionStore *session.Store, admin *handlers.Admin, auth *handlers.Auth
 				r.Post("/reorder", admin.CategoryReorder)
 			})
 
+			// Menus
+			r.Route("/menus", func(r chi.Router) {
+				r.Get("/", admin.MenusPage)
+				r.Post("/items", admin.MenuItemCreate)
+				r.Put("/items/{id}", admin.MenuItemUpdate)
+				r.Delete("/items/{id}", admin.MenuItemDelete)
+				r.Post("/items/reorder", admin.MenuItemReorder)
+				r.Get("/content-list", admin.MenuContentList)
+			})
+
 			// User management — admin only
 			r.Route("/users", func(r chi.Router) {
 				r.Use(middleware.RequireAdmin)

@@ -57,6 +57,27 @@ type SocialMeta struct {
 	Settings     models.SiteSettings // site_title, site_tagline, og_default_image, twitter_site
 }
 
+// TemplateMenuItem is the template-safe menu item available in templates.
+type TemplateMenuItem struct {
+	Label    string
+	URL      string
+	Target   string
+	Active   bool               // true when URL matches current page slug
+	Children []TemplateMenuItem
+}
+
+// Menus holds menu items keyed by location for template access.
+// Templates use {{range .Menus.main}}, {{range .Menus.footer}}, etc.
+type Menus map[string][]TemplateMenuItem
+
+// FragmentData is passed to header/footer fragments so they can render
+// dynamic navigation menus, site name, and current year.
+type FragmentData struct {
+	SiteName string
+	Year     int
+	Menus    Menus
+}
+
 // PageData holds all variables available to a page template when rendering
 // a public page. Template authors (or AI) can use these as {{.Title}}, etc.
 type PageData struct {
@@ -74,6 +95,7 @@ type PageData struct {
 	Header              template.HTML // Pre-rendered header fragment
 	Footer              template.HTML // Pre-rendered footer fragment
 	Year                int
+	Menus               Menus
 }
 
 // PostItem represents a single post in a listing (used by article_loop template).
@@ -95,6 +117,7 @@ type ListData struct {
 	Header   template.HTML
 	Footer   template.HTML
 	Year     int
+	Menus    Menus
 }
 
 // Engine compiles and renders templates from the database. It maintains
@@ -148,15 +171,22 @@ func (e *Engine) InvalidateAllTemplates() {
 // img holds the featured image data including responsive variants (pass nil if none).
 // siteName overrides the default site name displayed in templates.
 // social carries SEO/social meta context; pass nil to skip meta tag injection.
-func (e *Engine) RenderPage(tenantID uuid.UUID, siteName string, content *models.Content, img *FeaturedImage, social *SocialMeta) ([]byte, error) {
+func (e *Engine) RenderPage(tenantID uuid.UUID, siteName string, content *models.Content, img *FeaturedImage, social *SocialMeta, menus Menus) ([]byte, error) {
+	// Build fragment data for header/footer (menus, site name, year).
+	fragData := &FragmentData{
+		SiteName: siteName,
+		Year:     time.Now().Year(),
+		Menus:    menus,
+	}
+
 	// Load active templates for each component.
-	header, err := e.renderFragment(tenantID, models.TemplateTypeHeader, nil)
+	header, err := e.renderFragment(tenantID, models.TemplateTypeHeader, fragData)
 	if err != nil {
 		slog.Warn("header template not found or failed", "error", err)
 		header = ""
 	}
 
-	footer, err := e.renderFragment(tenantID, models.TemplateTypeFooter, nil)
+	footer, err := e.renderFragment(tenantID, models.TemplateTypeFooter, fragData)
 	if err != nil {
 		slog.Warn("footer template not found or failed", "error", err)
 		footer = ""
@@ -200,6 +230,7 @@ func (e *Engine) RenderPage(tenantID uuid.UUID, siteName string, content *models
 		Header:      template.HTML(header),
 		Footer:      template.HTML(footer),
 		Year:        time.Now().Year(),
+		Menus:       menus,
 	}
 
 	if img != nil {
@@ -238,14 +269,21 @@ func (e *Engine) RenderPage(tenantID uuid.UUID, siteName string, content *models
 // tenantID scopes the template lookup. siteName overrides the default.
 // featuredImages maps content ID strings to their featured image data
 // including responsive variants.
-func (e *Engine) RenderPostList(tenantID uuid.UUID, siteName string, posts []models.Content, featuredImages map[string]*FeaturedImage) ([]byte, error) {
-	header, err := e.renderFragment(tenantID, models.TemplateTypeHeader, nil)
+func (e *Engine) RenderPostList(tenantID uuid.UUID, siteName string, posts []models.Content, featuredImages map[string]*FeaturedImage, menus Menus) ([]byte, error) {
+	// Build fragment data for header/footer (menus, site name, year).
+	fragData := &FragmentData{
+		SiteName: siteName,
+		Year:     time.Now().Year(),
+		Menus:    menus,
+	}
+
+	header, err := e.renderFragment(tenantID, models.TemplateTypeHeader, fragData)
 	if err != nil {
 		slog.Warn("header template not found or failed", "error", err)
 		header = ""
 	}
 
-	footer, err := e.renderFragment(tenantID, models.TemplateTypeFooter, nil)
+	footer, err := e.renderFragment(tenantID, models.TemplateTypeFooter, fragData)
 	if err != nil {
 		slog.Warn("footer template not found or failed", "error", err)
 		footer = ""
@@ -283,6 +321,7 @@ func (e *Engine) RenderPostList(tenantID uuid.UUID, siteName string, posts []mod
 		Header:   template.HTML(header),
 		Footer:   template.HTML(footer),
 		Year:     time.Now().Year(),
+		Menus:    menus,
 	}
 
 	rendered, err := e.compileAndRender(loopTmpl.ID.String(), loopTmpl.Version, loopTmpl.HTMLContent, data)

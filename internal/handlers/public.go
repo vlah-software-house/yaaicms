@@ -29,6 +29,7 @@ type Public struct {
 	engine           *engine.Engine
 	contentStore     *store.ContentStore
 	siteSettingStore *store.SiteSettingStore
+	menuStore        *store.MenuStore
 	mediaStore       *store.MediaStore
 	variantStore     *store.VariantStore
 	storageClient    *storage.Client
@@ -40,11 +41,12 @@ type Public struct {
 // NewPublic creates a new Public handler group. mediaStore, variantStore,
 // and storageClient may be nil if S3 is not configured.
 // domainResolver and baseDomain are used to compute canonical URLs for SEO meta tags.
-func NewPublic(eng *engine.Engine, contentStore *store.ContentStore, siteSettingStore *store.SiteSettingStore, mediaStore *store.MediaStore, variantStore *store.VariantStore, storageClient *storage.Client, pageCache *cache.PageCache, domainResolver middleware.DomainResolver, baseDomain string) *Public {
+func NewPublic(eng *engine.Engine, contentStore *store.ContentStore, siteSettingStore *store.SiteSettingStore, menuStore *store.MenuStore, mediaStore *store.MediaStore, variantStore *store.VariantStore, storageClient *storage.Client, pageCache *cache.PageCache, domainResolver middleware.DomainResolver, baseDomain string) *Public {
 	return &Public{
 		engine:           eng,
 		contentStore:     contentStore,
 		siteSettingStore: siteSettingStore,
+		menuStore:        menuStore,
 		mediaStore:       mediaStore,
 		variantStore:     variantStore,
 		storageClient:    storageClient,
@@ -81,7 +83,8 @@ func (p *Public) Homepage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(posts) > 0 {
-		rendered, err := p.engine.RenderPostList(tenant.ID, tenant.Name, posts, p.resolveFeaturedImages(posts))
+		menus := p.loadMenus(tenant.ID, "")
+		rendered, err := p.engine.RenderPostList(tenant.ID, tenant.Name, posts, p.resolveFeaturedImages(posts), menus)
 		if err == nil {
 			p.pageCache.Set(ctx, cache.HomepageKey(tenant.ID.String()), rendered)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -94,7 +97,8 @@ func (p *Public) Homepage(w http.ResponseWriter, r *http.Request) {
 	// Fall back to a "home" page if it exists.
 	home, err := p.contentStore.FindBySlug(tenant.ID, "home")
 	if err == nil && home != nil {
-		rendered, err := p.engine.RenderPage(tenant.ID, tenant.Name, home, p.resolveFeaturedImage(home), p.buildSocialMeta(tenant, home.Type, "/"))
+		menus := p.loadMenus(tenant.ID, "home")
+		rendered, err := p.engine.RenderPage(tenant.ID, tenant.Name, home, p.resolveFeaturedImage(home), p.buildSocialMeta(tenant, home.Type, "/"), menus)
 		if err == nil {
 			p.pageCache.Set(ctx, cache.HomepageKey(tenant.ID.String()), rendered)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -148,7 +152,8 @@ func (p *Public) Page(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rendered, err := p.engine.RenderPage(tenant.ID, tenant.Name, content, p.resolveFeaturedImage(content), p.buildSocialMeta(tenant, content.Type, "/"+content.Slug))
+	menus := p.loadMenus(tenant.ID, slugParam)
+	rendered, err := p.engine.RenderPage(tenant.ID, tenant.Name, content, p.resolveFeaturedImage(content), p.buildSocialMeta(tenant, content.Type, "/"+content.Slug), menus)
 	if err != nil {
 		slog.Error("render page failed", "error", err, "slug", slugParam)
 		// Fall back to a safe error page when the template engine fails.
@@ -305,4 +310,53 @@ func (p *Public) buildSrcsetFromVariants(variants []models.MediaVariant) string 
 		parts = append(parts, fmt.Sprintf("%s %dw", url, v.Width))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// loadMenus loads all menu locations for a tenant and converts them to
+// engine.Menus for template rendering. Items with content_id have their
+// URL resolved from the content's slug. currentSlug marks matching items
+// as Active for navigation highlighting.
+func (p *Public) loadMenus(tenantID uuid.UUID, currentSlug string) engine.Menus {
+	menus := make(engine.Menus)
+	for _, loc := range store.MenuLocations {
+		menu, err := p.menuStore.FindByLocation(tenantID, loc)
+		if err != nil || menu == nil {
+			continue
+		}
+		menus[loc] = p.convertMenuItems(menu.Items, currentSlug)
+	}
+	return menus
+}
+
+// convertMenuItems converts model menu items to template-safe items,
+// resolving content slugs and setting Active state.
+func (p *Public) convertMenuItems(items []models.MenuItem, currentSlug string) []engine.TemplateMenuItem {
+	var result []engine.TemplateMenuItem
+	for _, item := range items {
+		ti := engine.TemplateMenuItem{
+			Label:  item.Label,
+			URL:    item.URL,
+			Target: item.Target,
+		}
+
+		// Resolve URL from content slug when linked to content.
+		if item.ContentID != nil {
+			content, err := p.contentStore.FindByID(*item.ContentID)
+			if err == nil && content != nil {
+				ti.URL = "/" + content.Slug
+			}
+		}
+
+		// Mark as active if URL matches current page.
+		if currentSlug != "" && ti.URL == "/"+currentSlug {
+			ti.Active = true
+		}
+
+		if len(item.Children) > 0 {
+			ti.Children = p.convertMenuItems(item.Children, currentSlug)
+		}
+
+		result = append(result, ti)
+	}
+	return result
 }

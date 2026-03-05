@@ -35,6 +35,9 @@ func Seed(db *sql.DB) error {
 	if err := seedContent(db); err != nil {
 		return fmt.Errorf("seed content: %w", err)
 	}
+	if err := seedMenus(db); err != nil {
+		return fmt.Errorf("seed menus: %w", err)
+	}
 	return nil
 }
 
@@ -125,7 +128,6 @@ func seedSiteSettings(db *sql.DB) error {
 		"language":       "en",
 		"date_format":    "2006-01-02",
 		"posts_per_page": "10",
-		"site_url":       "",
 	}
 
 	for key, value := range defaults {
@@ -307,5 +309,30 @@ func seedContent(db *sql.DB) error {
 	}
 
 	slog.Info("seeded sample content", "count", len(pages))
+	return nil
+}
+
+// seedMenus creates the 3 predefined menu locations for the default tenant.
+func seedMenus(db *sql.DB) error {
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM menus WHERE tenant_id = $1", defaultTenantID).Scan(&count); err != nil {
+		return fmt.Errorf("check menus: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+
+	for _, loc := range []string{"main", "footer", "footer_legal"} {
+		_, err := db.Exec(`
+			INSERT INTO menus (tenant_id, location)
+			VALUES ($1, $2)
+			ON CONFLICT (tenant_id, location) DO NOTHING
+		`, defaultTenantID, loc)
+		if err != nil {
+			return fmt.Errorf("seed menu %q: %w", loc, err)
+		}
+	}
+
+	slog.Info("seeded menu locations", "count", 3)
 	return nil
 }

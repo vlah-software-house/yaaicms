@@ -1519,9 +1519,18 @@ AVAILABLE VARIABLES:
   The current calendar year (e.g., 2026).
   Rarely needed in headers, but available for copyright if combined header/footer.
 
+- {{range .Menus.main}} — Main navigation menu items
+  Each item has: {{.Label}}, {{.URL}}, {{.Target}}, {{.Active}}, {{.Children}}
+  Use {{range .Children}} for dropdown sub-items (one level only).
+  {{.Active}} is true when the item matches the current page — use for active state styling.
+  {{.Target}} is "_blank" for external links — use: {{if .Target}}target="{{.Target}}"{{end}}
+  IMPORTANT: NEVER hardcode navigation links. Always use {{range .Menus.main}} to render
+  the main navigation. Users manage these links through the admin Menus page.
+
 DESIGN GUIDELINES:
 - Include a prominent site name/logo linking to "/" (the homepage).
-- Add navigation links: Home (/), Blog (/blog), and leave room for more.
+- Render navigation from {{range .Menus.main}} — do NOT hardcode any nav links.
+- Support dropdown menus for items with {{.Children}} (one level of nesting).
 - Make the header responsive: hamburger menu or collapsible nav on mobile.
 - Use a contrasting background (e.g., dark bg with light text, or white with border-bottom).
 - Consider making it sticky with "sticky top-0 z-50" for better UX.`
@@ -1540,9 +1549,20 @@ AVAILABLE VARIABLES:
 - {{.Year}} (int, always set)
   The current year. Use for "© 2026 SiteName" copyright notices.
 
+- {{range .Menus.footer}} — Footer navigation links
+  Each item has: {{.Label}}, {{.URL}}, {{.Target}}
+  Use for secondary navigation links in the footer (e.g., About, Contact, Blog).
+  IMPORTANT: NEVER hardcode footer navigation links. Always use {{range .Menus.footer}}.
+
+- {{range .Menus.footer_legal}} — Footer legal links (Privacy, Terms, etc.)
+  Each item has: {{.Label}}, {{.URL}}, {{.Target}}
+  Use for legal/compliance links typically displayed smaller or in a separate row.
+  IMPORTANT: NEVER hardcode footer legal links. Always use {{range .Menus.footer_legal}}.
+
 DESIGN GUIDELINES:
 - Include a copyright notice: "© {{.Year}} {{.SiteName}}. All rights reserved."
-- Optionally add: secondary navigation links, social media icons, a brief tagline.
+- Render footer navigation from {{range .Menus.footer}} — do NOT hardcode any nav links.
+- Render legal links from {{range .Menus.footer_legal}} in a separate row or section.
 - Keep it compact — footers should complement, not compete with content.
 - Use a background that pairs with the header for visual consistency.`
 
@@ -1721,19 +1741,24 @@ func buildPreviewData(tmplType string) any {
 	switch tmplType {
 	case "page":
 		return engine.PageData{
-			SiteName:         "YaaiCMS",
-			Title:            "Preview Page Title",
-			Body:             "<p>This is preview content. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>",
-			Excerpt:          "A brief preview excerpt for the page.",
-			MetaDescription:  "Preview meta description for search engines",
+			SiteName:            "YaaiCMS",
+			Title:               "Preview Page Title",
+			Body:                "<p>This is preview content. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>",
+			Excerpt:             "A brief preview excerpt for the page.",
+			MetaDescription:     "Preview meta description for search engines",
 			FeaturedImageURL:    "https://placehold.co/1200x630/0f172a/e2e8f0?text=Featured+Image",
 			FeaturedImageSrcset: "https://placehold.co/640x336/0f172a/e2e8f0?text=640w 640w, https://placehold.co/1024x538/0f172a/e2e8f0?text=1024w 1024w, https://placehold.co/1920x1008/0f172a/e2e8f0?text=1920w 1920w",
 			FeaturedImageAlt:    "A preview featured image",
 			Slug:                "preview-page",
-			PublishedAt:      "February 25, 2026",
-			Header:           "<header class='bg-gray-800 text-white p-4'><nav class='max-w-6xl mx-auto flex justify-between items-center'><span class='text-xl font-bold'>YaaiCMS</span><div class='space-x-4'><a href='/' class='hover:text-gray-300'>Home</a><a href='/blog' class='hover:text-gray-300'>Blog</a></div></nav></header>",
-			Footer:           "<footer class='bg-gray-800 text-gray-400 p-6 text-center text-sm'>&copy; 2026 YaaiCMS. All rights reserved.</footer>",
-			Year:             2026,
+			PublishedAt:         "February 25, 2026",
+			Header:              "<header class='bg-gray-800 text-white p-4'><nav class='max-w-6xl mx-auto flex justify-between items-center'><span class='text-xl font-bold'>YaaiCMS</span><div class='space-x-4'><a href='/' class='hover:text-gray-300'>Home</a><a href='/blog' class='hover:text-gray-300'>Blog</a></div></nav></header>",
+			Footer:              "<footer class='bg-gray-800 text-gray-400 p-6 text-center text-sm'>&copy; 2026 YaaiCMS. All rights reserved.</footer>",
+			Year:                2026,
+			Menus: engine.Menus{
+				"main":         {{Label: "Home", URL: "/", Active: true}, {Label: "About", URL: "/about"}, {Label: "Blog", URL: "/blog"}},
+				"footer":       {{Label: "About", URL: "/about"}, {Label: "Contact", URL: "/contact"}},
+				"footer_legal": {{Label: "Privacy", URL: "/privacy"}, {Label: "Terms", URL: "/terms"}},
+			},
 		}
 	case "article_loop":
 		return engine.ListData{
@@ -1747,13 +1772,39 @@ func buildPreviewData(tmplType string) any {
 			Header: "<header class='bg-gray-800 text-white p-4'><nav class='max-w-6xl mx-auto flex justify-between items-center'><span class='text-xl font-bold'>YaaiCMS</span><div class='space-x-4'><a href='/' class='hover:text-gray-300'>Home</a><a href='/blog' class='hover:text-gray-300'>Blog</a></div></nav></header>",
 			Footer: "<footer class='bg-gray-800 text-gray-400 p-6 text-center text-sm'>&copy; 2026 YaaiCMS. All rights reserved.</footer>",
 			Year:   2026,
+			Menus: engine.Menus{
+				"main":         {{Label: "Home", URL: "/", Active: true}, {Label: "About", URL: "/about"}, {Label: "Blog", URL: "/blog"}},
+				"footer":       {{Label: "About", URL: "/about"}, {Label: "Contact", URL: "/contact"}},
+				"footer_legal": {{Label: "Privacy", URL: "/privacy"}, {Label: "Terms", URL: "/terms"}},
+			},
 		}
 	default:
-		// Header and footer use nil data (they only access .SiteName and .Year).
-		return struct {
-			SiteName string
-			Year     int
-		}{SiteName: "YaaiCMS", Year: 2026}
+		// Header and footer use FragmentData with sample menus for preview.
+		return engine.FragmentData{
+			SiteName: "YaaiCMS",
+			Year:     2026,
+			Menus: engine.Menus{
+				"main": {
+					{Label: "Home", URL: "/", Active: true},
+					{Label: "About", URL: "/about"},
+					{Label: "Blog", URL: "/blog"},
+					{Label: "Services", URL: "#", Children: []engine.TemplateMenuItem{
+						{Label: "Consulting", URL: "/consulting"},
+						{Label: "Development", URL: "/development"},
+					}},
+					{Label: "Contact", URL: "/contact"},
+				},
+				"footer": {
+					{Label: "About", URL: "/about"},
+					{Label: "Blog", URL: "/blog"},
+					{Label: "Contact", URL: "/contact"},
+				},
+				"footer_legal": {
+					{Label: "Privacy Policy", URL: "/privacy"},
+					{Label: "Terms of Service", URL: "/terms"},
+				},
+			},
+		}
 	}
 }
 

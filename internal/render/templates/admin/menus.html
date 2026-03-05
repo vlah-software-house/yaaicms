@@ -1,0 +1,462 @@
+{{/* Copyright (c) 2026 Madalin Gabriel Ignisca <hi@madalin.me> */}}
+{{/* Copyright (c) 2026 Vlah Software House SRL <contact@vlah.sh> */}}
+{{/* All rights reserved. See LICENSE for details. */}}
+{{define "title"}}Menus{{end}}
+
+{{define "menuItemNode"}}
+{{range .}}
+<div class="menu-item rounded-md border border-gray-100 bg-gray-50 hover:bg-gray-100 transition-colors"
+     data-id="{{.ID}}">
+    <div class="flex items-center gap-2 px-3 py-2">
+        <!-- Drag handle -->
+        <span class="drag-handle cursor-grab text-gray-400 hover:text-gray-600 flex-shrink-0">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+        </span>
+
+        <!-- Item info -->
+        <div class="flex-1 min-w-0">
+            <span class="text-sm font-medium text-gray-900 item-label">{{.Label}}</span>
+            <span class="ml-2 text-xs text-gray-400">{{if .URL}}{{.URL}}{{else}}(no URL){{end}}</span>
+            {{if .ContentID}}<span class="ml-1 text-xs text-indigo-500">[content]</span>{{end}}
+            {{if eq .Target "_blank"}}<span class="ml-1 text-xs text-gray-400" title="Opens in new tab">↗</span>{{end}}
+        </div>
+
+        <!-- Actions -->
+        <button @click="editItem = {id: '{{.ID}}', menu_id: '{{.MenuID}}', label: '{{.Label}}', url: '{{.URL}}', content_id: '{{if .ContentID}}{{.ContentID}}{{end}}', target: '{{.Target}}'}"
+                class="text-xs text-indigo-600 hover:text-indigo-800 flex-shrink-0">Edit</button>
+        <button @click="if(confirm('Delete menu item \'{{.Label}}\'?')) deleteItem('{{.ID}}')"
+                class="text-xs text-red-600 hover:text-red-800 flex-shrink-0">Delete</button>
+    </div>
+
+    <!-- Children (nested sortable, main nav only) -->
+    <div class="menu-sortable ml-6 space-y-1 {{if .Children}}pb-1{{end}}"
+         data-parent-id="{{.ID}}">
+        {{if .Children}}
+        {{template "menuItemNode" .Children}}
+        {{end}}
+    </div>
+</div>
+{{end}}
+{{end}}
+
+{{define "content"}}
+<!-- SortableJS for drag & drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+
+<div x-data="menuManager()" class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-xl font-semibold text-gray-900">Menus</h2>
+            <p class="mt-1 text-sm text-gray-500">Manage navigation menus for your site header and footer.</p>
+        </div>
+    </div>
+
+    <!-- Menu Tabs -->
+    <div class="border-b border-gray-200">
+        <nav class="-mb-px flex space-x-8">
+            {{range $i, $menu := .Data.Menus}}
+            <button @click="activeTab = '{{$menu.Location}}'; $nextTick(() => initSortables())"
+                    :class="activeTab === '{{$menu.Location}}'
+                        ? 'border-indigo-500 text-indigo-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors">
+                {{if eq $menu.Location "main"}}Main Nav{{end}}
+                {{if eq $menu.Location "footer"}}Footer Nav{{end}}
+                {{if eq $menu.Location "footer_legal"}}Footer Legal{{end}}
+            </button>
+            {{end}}
+        </nav>
+    </div>
+
+    <!-- Menu Panels -->
+    {{range $i, $menu := .Data.Menus}}
+    <div x-show="activeTab === '{{$menu.Location}}'" x-transition class="space-y-4">
+        <!-- Add Item + Save Order -->
+        <div class="flex items-center justify-between">
+            <p class="text-sm text-gray-500">
+                {{if eq $menu.Location "main"}}Header navigation. Supports one level of dropdown nesting.{{end}}
+                {{if eq $menu.Location "footer"}}Footer navigation links.{{end}}
+                {{if eq $menu.Location "footer_legal"}}Footer legal links (Privacy, Terms, etc.).{{end}}
+            </p>
+            <div class="flex items-center gap-2">
+                <button x-show="orderChanged === '{{$menu.ID}}'" x-transition
+                        @click="saveOrder('{{$menu.ID}}')"
+                        :disabled="saving"
+                        class="inline-flex items-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-500 disabled:opacity-50 transition-colors">
+                    <svg x-show="!saving" class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                    <svg x-show="saving" class="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    Save Order
+                </button>
+                <button @click="showAddForm = '{{$menu.ID}}'; newItem.menu_id = '{{$menu.ID}}'; newItem.linkType = 'custom'"
+                        class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 transition-colors">
+                    <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    Add Item
+                </button>
+            </div>
+        </div>
+
+        <!-- Add Item Form -->
+        <div x-show="showAddForm === '{{$menu.ID}}'" x-transition
+             class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 class="text-sm font-semibold text-gray-900 mb-4">New Menu Item</h3>
+            <form @submit.prevent="createItem()" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Label</label>
+                    <input type="text" x-model="newItem.label" required
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="e.g. About Us">
+                </div>
+
+                <!-- Link Type Toggle -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Link Type</label>
+                    <div class="flex gap-4">
+                        <label class="inline-flex items-center">
+                            <input type="radio" x-model="newItem.linkType" value="content"
+                                   class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                            <span class="ml-2 text-sm text-gray-700">Content</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="radio" x-model="newItem.linkType" value="custom"
+                                   class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                            <span class="ml-2 text-sm text-gray-700">Custom URL</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Content Picker -->
+                <div x-show="newItem.linkType === 'content'">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Select Content</label>
+                    <select x-model="newItem.content_id"
+                            class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                   focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+                        <option value="">-- Select --</option>
+                        {{if $.Data.Pages}}
+                        <optgroup label="Pages">
+                            {{range $.Data.Pages}}
+                            <option value="{{.ID}}">{{.Title}} (/{{.Slug}})</option>
+                            {{end}}
+                        </optgroup>
+                        {{end}}
+                        {{if $.Data.Posts}}
+                        <optgroup label="Posts">
+                            {{range $.Data.Posts}}
+                            <option value="{{.ID}}">{{.Title}} (/{{.Slug}})</option>
+                            {{end}}
+                        </optgroup>
+                        {{end}}
+                    </select>
+                </div>
+
+                <!-- Custom URL -->
+                <div x-show="newItem.linkType === 'custom'">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">URL</label>
+                    <input type="text" x-model="newItem.url"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="e.g. /about or https://example.com">
+                </div>
+
+                <!-- Target -->
+                <div>
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" x-model="newItem.openNew"
+                               class="h-4 w-4 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                        <span class="ml-2 text-sm text-gray-700">Open in new tab</span>
+                    </label>
+                </div>
+
+                <div class="flex justify-end gap-2">
+                    <button type="button" @click="showAddForm = null; resetNewItem()"
+                            class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit" :disabled="!newItem.label.trim() || creating"
+                            class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+                        Add Item
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Menu Items Tree -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            {{if $menu.Items}}
+            <div class="p-2">
+                <div id="menu-tree-{{$menu.ID}}" class="menu-sortable space-y-1" data-menu-id="{{$menu.ID}}" data-location="{{$menu.Location}}">
+                    {{template "menuItemNode" $menu.Items}}
+                </div>
+            </div>
+            {{else}}
+            <div class="px-6 py-12 text-center text-sm text-gray-500">
+                No items in this menu yet. Click "Add Item" to create navigation links.
+            </div>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+
+    <!-- Edit Modal -->
+    <div x-show="editItem" x-transition.opacity
+         class="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50"
+         @click.self="editItem = null">
+        <div class="bg-white rounded-lg shadow-xl border border-gray-200 p-6 w-full max-w-md" @click.stop>
+            <h3 class="text-sm font-semibold text-gray-900 mb-4">Edit Menu Item</h3>
+            <template x-if="editItem">
+                <form @submit.prevent="updateItem()" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Label</label>
+                        <input type="text" x-model="editItem.label" required
+                               class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                      focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+
+                    <!-- Link Type Toggle -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Link Type</label>
+                        <div class="flex gap-4">
+                            <label class="inline-flex items-center">
+                                <input type="radio" x-model="editItem.linkType" value="content"
+                                       class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                                <span class="ml-2 text-sm text-gray-700">Content</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="radio" x-model="editItem.linkType" value="custom"
+                                       class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                                <span class="ml-2 text-sm text-gray-700">Custom URL</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Content Picker -->
+                    <div x-show="editItem.linkType === 'content'">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Select Content</label>
+                        <select x-model="editItem.content_id"
+                                class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                       focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+                            <option value="">-- Select --</option>
+                            {{if $.Data.Pages}}
+                            <optgroup label="Pages">
+                                {{range $.Data.Pages}}
+                                <option value="{{.ID}}">{{.Title}} (/{{.Slug}})</option>
+                                {{end}}
+                            </optgroup>
+                            {{end}}
+                            {{if $.Data.Posts}}
+                            <optgroup label="Posts">
+                                {{range $.Data.Posts}}
+                                <option value="{{.ID}}">{{.Title}} (/{{.Slug}})</option>
+                                {{end}}
+                            </optgroup>
+                            {{end}}
+                        </select>
+                    </div>
+
+                    <!-- Custom URL -->
+                    <div x-show="editItem.linkType === 'custom'">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">URL</label>
+                        <input type="text" x-model="editItem.url"
+                               class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                      focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+
+                    <!-- Target -->
+                    <div>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" :checked="editItem.target === '_blank'"
+                                   @change="editItem.target = $event.target.checked ? '_blank' : ''"
+                                   class="h-4 w-4 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                            <span class="ml-2 text-sm text-gray-700">Open in new tab</span>
+                        </label>
+                    </div>
+
+                    <div class="flex justify-end gap-2">
+                        <button type="button" @click="editItem = null"
+                                class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">
+                            Save
+                        </button>
+                    </div>
+                </form>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+function menuManager() {
+    return {
+        activeTab: '{{if .Data.Menus}}{{(index .Data.Menus 0).Location}}{{else}}main{{end}}',
+        showAddForm: null,
+        orderChanged: null,
+        saving: false,
+        creating: false,
+        editItem: null,
+        newItem: { menu_id: '', label: '', url: '', content_id: '', linkType: 'custom', openNew: false },
+        sortables: [],
+
+        init() {
+            this.$nextTick(() => this.initSortables());
+        },
+
+        resetNewItem() {
+            this.newItem = { menu_id: '', label: '', url: '', content_id: '', linkType: 'custom', openNew: false };
+        },
+
+        initSortables() {
+            // Clean up existing sortables.
+            this.sortables.forEach(s => s.destroy());
+            this.sortables = [];
+
+            document.querySelectorAll('.menu-sortable').forEach(el => {
+                const menuID = el.closest('[data-menu-id]')?.dataset.menuId || el.dataset.menuId;
+                const location = el.closest('[data-location]')?.dataset.location || el.dataset.location;
+                // Only allow nesting for main nav.
+                const allowNesting = location === 'main';
+
+                const s = new Sortable(el, {
+                    group: 'menu-' + menuID,
+                    animation: 150,
+                    handle: '.drag-handle',
+                    fallbackOnBody: true,
+                    swapThreshold: 0.65,
+                    ghostClass: 'opacity-30',
+                    onEnd: () => { this.orderChanged = menuID; }
+                });
+                this.sortables.push(s);
+            });
+        },
+
+        collectOrder(menuID) {
+            const items = [];
+            const treeEl = document.getElementById('menu-tree-' + menuID);
+            if (!treeEl) return items;
+
+            const walk = (container, parentId) => {
+                container.querySelectorAll(':scope > .menu-item').forEach((item, idx) => {
+                    const id = item.dataset.id;
+                    items.push({ id, parent_id: parentId || null, order: idx });
+                    const children = item.querySelector('.menu-sortable');
+                    if (children) walk(children, id);
+                });
+            };
+            walk(treeEl, null);
+            return items;
+        },
+
+        getCSRF() {
+            return document.body.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1] || '';
+        },
+
+        async saveOrder(menuID) {
+            this.saving = true;
+            try {
+                const items = this.collectOrder(menuID);
+                await fetch('/admin/menus/items/reorder?menu_id=' + menuID, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': this.getCSRF()
+                    },
+                    body: JSON.stringify(items)
+                });
+                this.orderChanged = null;
+            } catch (e) {
+                alert('Failed to save order');
+            }
+            this.saving = false;
+        },
+
+        async createItem() {
+            this.creating = true;
+            const form = new FormData();
+            form.append('menu_id', this.newItem.menu_id);
+            form.append('label', this.newItem.label);
+            form.append('target', this.newItem.openNew ? '_blank' : '');
+
+            if (this.newItem.linkType === 'content' && this.newItem.content_id) {
+                form.append('content_id', this.newItem.content_id);
+            } else {
+                form.append('url', this.newItem.url);
+            }
+
+            const csrf = this.getCSRF();
+            try {
+                const resp = await fetch('/admin/menus/items', {
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': csrf },
+                    body: form
+                });
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    alert('Failed to create menu item');
+                }
+            } catch (e) {
+                alert('Request failed');
+            }
+            this.creating = false;
+        },
+
+        async updateItem() {
+            const item = this.editItem;
+            const form = new FormData();
+            form.append('label', item.label);
+            form.append('target', item.target || '');
+
+            if (item.linkType === 'content' && item.content_id) {
+                form.append('content_id', item.content_id);
+                form.append('url', '');
+            } else {
+                form.append('url', item.url || '');
+                form.append('content_id', '');
+            }
+
+            const csrf = this.getCSRF();
+            try {
+                const resp = await fetch('/admin/menus/items/' + item.id, {
+                    method: 'PUT',
+                    headers: { 'X-CSRF-Token': csrf },
+                    body: form
+                });
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    alert('Failed to update menu item');
+                }
+            } catch (e) {
+                alert('Request failed');
+            }
+        },
+
+        async deleteItem(id) {
+            const csrf = this.getCSRF();
+            try {
+                const resp = await fetch('/admin/menus/items/' + id, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRF-Token': csrf }
+                });
+                if (resp.ok) {
+                    window.location.reload();
+                }
+            } catch (e) {
+                alert('Request failed');
+            }
+        }
+    };
+}
+</script>
+{{end}}
