@@ -421,9 +421,18 @@
                                               restyleStepStatus(step.type) === 'done' ? 'text-green-700' :
                                               restyleStepStatus(step.type) === 'error' ? 'text-red-700' : 'text-gray-400'"
                                       x-text="step.label"></span>
-                                <!-- Error message -->
+                                <!-- Error message + retry -->
                                 <template x-if="restyleErrors[step.type]">
-                                    <span class="text-xs text-red-500" x-text="restyleErrors[step.type]"></span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs text-red-500" x-text="restyleErrors[step.type]"></span>
+                                        <button type="button" @click="retryFromStep(step.type)"
+                                                :disabled="restyleRunning"
+                                                class="flex-shrink-0 rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700
+                                                       hover:bg-red-100 border border-red-200 transition-colors
+                                                       disabled:opacity-50 disabled:cursor-not-allowed">
+                                            Retry
+                                        </button>
+                                    </div>
                                 </template>
                             </div>
                         </template>
@@ -1013,6 +1022,80 @@ function aiTemplateBuilder() {
             this.restyleRunning = false;
 
             // Auto-refresh combined preview if all 4 succeeded.
+            if (this.hasAllRestyleResults()) {
+                await this.refreshRestylePreview();
+            }
+        },
+
+        async retryFromStep(fromType) {
+            if (this.restyleRunning) return;
+
+            const order = ['header', 'footer', 'page', 'article_loop'];
+            const startIdx = order.indexOf(fromType);
+            if (startIdx === -1) return;
+
+            // Clear errors and results from the failed step onward.
+            for (let i = startIdx; i < order.length; i++) {
+                this.restyleErrors[order[i]] = '';
+                this.restyleResults[order[i]] = '';
+            }
+
+            this.restyleRunning = true;
+            this.restyleSaveSuccess = false;
+            this.restyleSaveError = '';
+
+            const csrf = this.csrfToken();
+            const contentID = this.getEffectiveRestyleContentID();
+
+            for (let i = startIdx; i < order.length; i++) {
+                const tmplType = order[i];
+                this.restyleCurrentStep = tmplType;
+
+                try {
+                    const formData = new FormData();
+                    formData.append('prompt', this.restylePrompt);
+                    formData.append('template_type', tmplType);
+
+                    // Build context from all previously generated templates (including earlier successful ones).
+                    let contextParts = [];
+                    for (let j = 0; j < i; j++) {
+                        if (this.restyleResults[order[j]]) {
+                            contextParts.push(`Previously generated ${order[j]} template:\n${this.restyleResults[order[j]]}`);
+                        }
+                    }
+                    if (contextParts.length > 0) {
+                        formData.append('chat_history', 'user: ' + this.restylePrompt + '\n\n' + contextParts.join('\n\n'));
+                    }
+
+                    if (contentID) {
+                        formData.append('content_id', contentID);
+                    }
+
+                    const resp = await fetch('/admin/ai/generate-template', {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': csrf },
+                        body: formData
+                    });
+
+                    const data = await resp.json();
+
+                    if (data.error) {
+                        this.restyleErrors[tmplType] = data.error;
+                    } else if (!data.valid) {
+                        this.restyleErrors[tmplType] = data.validation_error || 'Template failed validation.';
+                    } else {
+                        this.restyleResults[tmplType] = data.html;
+                    }
+                } catch (err) {
+                    this.restyleErrors[tmplType] = 'Network error: ' + err.message;
+                }
+
+                if (this.restyleErrors[tmplType]) break;
+            }
+
+            this.restyleCurrentStep = '';
+            this.restyleRunning = false;
+
             if (this.hasAllRestyleResults()) {
                 await this.refreshRestylePreview();
             }
