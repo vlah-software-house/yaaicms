@@ -638,7 +638,7 @@
                                 <button type="button" @click="selectItem(item)"
                                         :class="selected && selected.id === item.id ? 'ring-2 ring-indigo-500 ring-offset-2' : 'hover:ring-2 hover:ring-gray-300'"
                                         class="aspect-square rounded-lg overflow-hidden border border-gray-200 focus:outline-none transition-all">
-                                    <img :src="item.thumb_url || item.url" :alt="item.alt_text || item.filename" alt=""
+                                    <img :src="item.thumb_url || item.url" :alt="item.alt_text || item.filename"
                                          class="w-full h-full object-cover">
                                 </button>
                             </template>
@@ -730,7 +730,7 @@
                                     </svg>
                                     <span class="text-sm font-medium text-green-800">Image generated and saved to your library</span>
                                 </div>
-                                <img :src="aiGenerated?.thumb_url || aiGenerated?.url" :alt="aiPrompt || 'AI generated image'" alt="AI generated image" class="w-full max-w-md rounded-lg shadow-sm border border-gray-200">
+                                <img :src="aiGenerated?.thumb_url || aiGenerated?.url" :alt="aiPrompt || 'AI generated image'" class="w-full max-w-md rounded-lg shadow-sm border border-gray-200">
                             </div>
                         </div>
                     </div>
@@ -740,7 +740,7 @@
             <!-- Footer with selected image details and insert button -->
             <div x-show="selected" class="border-t border-gray-200 px-6 py-4">
                 <div class="flex items-center gap-4">
-                    <img :src="selected?.thumb_url || selected?.url" :alt="selected?.alt_text || selected?.filename || 'Selected image'" alt="Selected image" class="h-12 w-12 rounded object-cover border border-gray-200">
+                    <img :src="selected?.thumb_url || selected?.url" :alt="selected?.alt_text || selected?.filename || 'Selected image'" class="h-12 w-12 rounded object-cover border border-gray-200">
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-gray-900 truncate" x-text="selected?.filename"></p>
                         <div class="mt-1">
