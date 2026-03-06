@@ -18,6 +18,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/microcosm-cc/bluemonday"
 
 	"yaaicms/internal/imaging"
 	"yaaicms/internal/middleware"
@@ -218,6 +219,11 @@ func (a *Admin) MediaUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeMediaError(w, "Failed to read file.", http.StatusInternalServerError)
 		return
+	}
+
+	// Sanitize SVG uploads to prevent stored XSS (embedded scripts, event handlers).
+	if contentType == "image/svg+xml" {
+		fileBytes = sanitizeSVG(fileBytes)
 	}
 
 	// Upload original to S3.
@@ -584,6 +590,54 @@ func extensionFromType(contentType string) string {
 	default:
 		return ""
 	}
+}
+
+// sanitizeSVG removes dangerous elements and attributes from SVG content
+// to prevent stored XSS attacks. Strips <script>, <foreignObject>, event
+// handlers (onclick, onload, etc.), and javascript: URLs.
+func sanitizeSVG(data []byte) []byte {
+	p := bluemonday.NewPolicy()
+
+	// Allow SVG structural elements.
+	p.AllowElements("svg", "g", "defs", "symbol", "use", "clipPath", "mask", "pattern", "marker", "filter")
+
+	// Allow SVG shape elements.
+	p.AllowElements("path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "tspan", "textPath")
+
+	// Allow SVG rendering elements.
+	p.AllowElements("linearGradient", "radialGradient", "stop", "image", "title", "desc", "metadata")
+
+	// Allow SVG filter primitives.
+	p.AllowElements("feBlend", "feColorMatrix", "feComponentTransfer", "feComposite", "feConvolveMatrix",
+		"feDiffuseLighting", "feDisplacementMap", "feDistantLight", "feFlood", "feFuncA", "feFuncB",
+		"feFuncG", "feFuncR", "feGaussianBlur", "feImage", "feMerge", "feMergeNode", "feMorphology",
+		"feOffset", "fePointLight", "feSpecularLighting", "feSpotLight", "feTile", "feTurbulence")
+
+	// Allow common SVG attributes on all allowed elements.
+	svgAttrs := []string{
+		"viewBox", "xmlns", "xmlns:xlink", "version", "width", "height",
+		"x", "y", "x1", "y1", "x2", "y2", "cx", "cy", "r", "rx", "ry",
+		"d", "points", "transform", "fill", "stroke", "stroke-width",
+		"stroke-linecap", "stroke-linejoin", "stroke-dasharray", "stroke-dashoffset",
+		"opacity", "fill-opacity", "stroke-opacity", "fill-rule", "clip-rule",
+		"font-family", "font-size", "font-weight", "font-style",
+		"text-anchor", "dominant-baseline", "alignment-baseline",
+		"id", "class", "style", "clip-path", "mask", "filter",
+		"gradientUnits", "gradientTransform", "spreadMethod", "offset", "stop-color", "stop-opacity",
+		"patternUnits", "patternTransform", "preserveAspectRatio",
+		"href", "xlink:href", "dx", "dy", "rotate", "textLength",
+		"startOffset", "method", "spacing",
+		"in", "in2", "result", "stdDeviation", "type", "values", "mode",
+		"color-interpolation-filters",
+	}
+	p.AllowAttrs(svgAttrs...).Globally()
+
+	// Explicitly NOT allowed (stripped by omission):
+	// - <script>, <foreignObject>, <iframe>, <embed>, <object>
+	// - on* event handlers (onclick, onload, onerror, etc.)
+	// - javascript: URLs in href/xlink:href (bluemonday strips these by default)
+
+	return p.SanitizeBytes(data)
 }
 
 // writeMediaError writes a JSON error response for media operations.
