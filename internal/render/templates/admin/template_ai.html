@@ -66,8 +66,8 @@
                 <!-- Preview content selector -->
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
                      x-show="templateType === 'page' || templateType === 'article_loop'">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Preview Content</label>
-                    <select x-model="previewContentID" @change="if (generatedHTML) refreshPreview()"
+                    <label for="preview-content-select" class="block text-sm font-medium text-gray-700 mb-2">Preview Content</label>
+                    <select id="preview-content-select" x-model="previewContentID" @change="if (generatedHTML) refreshPreview()"
                             class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
                                    focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
                         <option value="">Sample data (default)</option>
@@ -127,6 +127,7 @@
                     <div class="border-t border-gray-200 p-4">
                         <form @submit.prevent="sendMessage()" class="flex gap-2">
                             <input type="text" x-model="prompt" :disabled="loading"
+                                   aria-label="Describe your template or request changes"
                                    class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
                                           placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none
                                           disabled:bg-gray-50 disabled:text-gray-400"
@@ -204,8 +205,8 @@
                         <h3 class="text-sm font-semibold text-gray-900">Save as Template</h3>
 
                         <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">Template Name</label>
-                            <input type="text" x-model="saveName"
+                            <label for="save-template-name" class="block text-xs font-medium text-gray-700 mb-1">Template Name</label>
+                            <input id="save-template-name" type="text" x-model="saveName"
                                    class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
                                           placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
                                    placeholder="e.g., Modern Blog Page">
@@ -287,8 +288,8 @@
 
                     <!-- Style prompt textarea -->
                     <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Style Description</label>
-                        <textarea x-model="styleBrief" rows="5"
+                        <label for="style-description" class="block text-xs font-medium text-gray-700 mb-1">Style Description</label>
+                        <textarea id="style-description" x-model="styleBrief" rows="5"
                                   class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
                                          placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
                                   placeholder="e.g., Clean minimalist design with a dark navy (#1a1a2e) header and footer, warm cream (#faf3e0) backgrounds, Inter for headings, system-ui for body. Generous whitespace. Subtle hover transitions. Accent color: coral (#ff6b6b)."></textarea>
@@ -297,8 +298,8 @@
                     <!-- Theme name + action buttons -->
                     <div class="flex items-end gap-3">
                         <div class="flex-1">
-                            <label class="block text-xs font-medium text-gray-700 mb-1">Theme Name</label>
-                            <input type="text" x-model="themeName"
+                            <label for="theme-name" class="block text-xs font-medium text-gray-700 mb-1">Theme Name</label>
+                            <input id="theme-name" type="text" x-model="themeName"
                                    class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
                                           placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
                                    placeholder="e.g., Warm Minimalist">
@@ -352,8 +353,8 @@
 
             <!-- Preview content selector for restyle -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Preview Content</label>
-                <select x-model="restyleContentID"
+                <label for="restyle-preview-content" class="block text-sm font-medium text-gray-700 mb-2">Preview Content</label>
+                <select id="restyle-preview-content" x-model="restyleContentID"
                         class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
                                focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
                     <option value="">Sample data (default)</option>
@@ -368,8 +369,8 @@
             <!-- Restyle prompt + trigger -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Restyle Prompt</label>
-                    <input type="text" x-model="restylePrompt"
+                    <label for="restyle-prompt" class="block text-sm font-medium text-gray-700 mb-1">Restyle Prompt</label>
+                    <input id="restyle-prompt" type="text" x-model="restylePrompt"
                            class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
                                   placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
                            placeholder="e.g., Modern blog with clean typography and warm colors">
@@ -534,8 +535,8 @@
                     <p class="text-xs text-gray-500">Saves all 4 generated templates to the template library. You can then activate them from the templates list.</p>
 
                     <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Name Prefix</label>
-                        <input type="text" x-model="restyleSavePrefix"
+                        <label for="restyle-save-prefix" class="block text-xs font-medium text-gray-700 mb-1">Name Prefix</label>
+                        <input id="restyle-save-prefix" type="text" x-model="restyleSavePrefix"
                                class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
                                       placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
                                placeholder="e.g., Warm Minimalist">

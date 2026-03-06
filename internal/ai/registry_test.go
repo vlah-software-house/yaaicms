@@ -26,7 +26,7 @@ type mockProvider struct {
 
 func (m *mockProvider) Name() string { return m.name }
 
-func (m *mockProvider) Generate(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
+func (m *mockProvider) Generate(_ context.Context, systemPrompt, userPrompt string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.callCount++
@@ -35,7 +35,7 @@ func (m *mockProvider) Generate(ctx context.Context, systemPrompt, userPrompt st
 	return m.response, m.err
 }
 
-func (m *mockProvider) GenerateWithModel(ctx context.Context, model, systemPrompt, userPrompt string) (string, error) {
+func (m *mockProvider) GenerateWithModel(ctx context.Context, _, systemPrompt, userPrompt string) (string, error) {
 	// For testing, delegate to Generate (ignores model).
 	return m.Generate(ctx, systemPrompt, userPrompt)
 }

@@ -150,12 +150,14 @@ func (s *Store) Destroy(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	s.client.Del(ctx, keyPrefix+cookie.Value)
 
-	// Expire the cookie immediately.
+	// Expire the cookie immediately — must match Create's attributes.
 	http.SetCookie(w, &http.Cookie{
 		Name:     CookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   s.secureCook,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
 

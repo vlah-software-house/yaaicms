@@ -45,6 +45,7 @@
                             <p class="text-xs text-indigo-700 mt-0.5">Describe what you want to write about and let AI create the first draft.</p>
                         </div>
                     </div>
+                    <label for="ai_content_prompt" class="sr-only">AI content prompt</label>
                     <textarea id="ai_content_prompt" name="ai_content_prompt" rows="3"
                               class="block w-full rounded-md border border-indigo-300 bg-white px-3 py-2 text-sm shadow-sm
                                      placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
@@ -170,6 +171,7 @@
                             </div>
                             <!-- Image provider selector -->
                             <div x-show="providers.length > 1" class="mb-2">
+                                <label for="featured_image_provider" class="sr-only">Image provider</label>
                                 <select id="featured_image_provider" name="image_provider"
                                         x-model="selectedProvider"
                                         class="block w-full rounded-md border border-purple-300 bg-white px-2 py-1 text-xs shadow-sm
@@ -179,6 +181,7 @@
                                     </template>
                                 </select>
                             </div>
+                            <label for="ai_image_prompt" class="sr-only">AI image prompt</label>
                             <textarea id="ai_image_prompt" name="ai_image_prompt" rows="2"
                                       class="block w-full rounded-md border border-purple-300 bg-white px-3 py-2 text-xs shadow-sm
                                              placeholder-gray-400 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none"
@@ -520,6 +523,7 @@
                 <h4 class="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Rewrite Content</h4>
                 <p class="text-xs text-gray-500 mb-3">Rewrite your content in a different tone, with optional guidance.</p>
                 <div class="space-y-2">
+                    <label for="ai-tone" class="sr-only">Rewrite tone</label>
                     <select id="ai-tone" name="tone"
                             class="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-xs shadow-sm
                                    focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
@@ -529,6 +533,7 @@
                         <option value="persuasive">Persuasive</option>
                         <option value="concise">Concise & Direct</option>
                     </select>
+                    <label for="ai-rewrite-suggestion" class="sr-only">Rewrite suggestion</label>
                     <textarea id="ai-rewrite-suggestion" name="rewrite_suggestion" rows="2"
                               class="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-xs shadow-sm
                                      placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
@@ -683,8 +688,8 @@
                             <p class="text-xs text-purple-700 mb-3">Describe the image you'd like to create. The AI will generate it and add it to your media library.</p>
                             <!-- Image provider selector -->
                             <div x-show="imageProviders.length > 1" class="mb-3">
-                                <label class="block text-xs font-medium text-purple-800 mb-1">Image Provider</label>
-                                <select x-model="imageProvider"
+                                <label for="modal-image-provider" class="block text-xs font-medium text-purple-800 mb-1">Image Provider</label>
+                                <select id="modal-image-provider" x-model="imageProvider"
                                         class="block w-full rounded-md border border-purple-300 bg-white px-2 py-1.5 text-sm shadow-sm
                                                focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none">
                                     <template x-for="p in imageProviders" :key="p.name">
@@ -692,7 +697,8 @@
                                     </template>
                                 </select>
                             </div>
-                            <textarea x-model="aiPrompt" rows="3"
+                            <label for="modal-ai-image-prompt" class="sr-only">AI image generation prompt</label>
+                            <textarea id="modal-ai-image-prompt" x-model="aiPrompt" rows="3"
                                       class="block w-full rounded-md border border-purple-300 bg-white px-3 py-2 text-sm shadow-sm
                                              placeholder-gray-400 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none"
                                       placeholder="e.g. A cozy coffee shop with warm lighting, books on shelves, and a laptop on a wooden table..."></textarea>
@@ -724,7 +730,7 @@
                                     </svg>
                                     <span class="text-sm font-medium text-green-800">Image generated and saved to your library</span>
                                 </div>
-                                <img :src="aiGenerated?.thumb_url || aiGenerated?.url" class="w-full max-w-md rounded-lg shadow-sm border border-gray-200">
+                                <img :src="aiGenerated?.thumb_url || aiGenerated?.url" :alt="aiPrompt || 'AI generated image'" class="w-full max-w-md rounded-lg shadow-sm border border-gray-200">
                             </div>
                         </div>
                     </div>
@@ -734,12 +740,12 @@
             <!-- Footer with selected image details and insert button -->
             <div x-show="selected" class="border-t border-gray-200 px-6 py-4">
                 <div class="flex items-center gap-4">
-                    <img :src="selected?.thumb_url || selected?.url" class="h-12 w-12 rounded object-cover border border-gray-200">
+                    <img :src="selected?.thumb_url || selected?.url" :alt="selected?.alt_text || selected?.filename || 'Selected image'" class="h-12 w-12 rounded object-cover border border-gray-200">
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-gray-900 truncate" x-text="selected?.filename"></p>
                         <div class="mt-1">
-                            <label class="text-xs text-gray-500">Alt text:</label>
-                            <input type="text" x-model="altText"
+                            <label for="media-alt-text" class="text-xs text-gray-500">Alt text:</label>
+                            <input type="text" id="media-alt-text" x-model="altText"
                                    class="ml-1 inline-block w-64 rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
                                    placeholder="Describe the image...">
                         </div>

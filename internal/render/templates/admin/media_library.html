@@ -80,16 +80,16 @@
 
                 <!-- Alt text -->
                 <div class="mt-4">
-                    <label class="block text-sm font-medium text-gray-700">Alt text (optional)</label>
-                    <input type="text" x-model="altText"
+                    <label for="alt-text" class="block text-sm font-medium text-gray-700">Alt text (optional)</label>
+                    <input type="text" id="alt-text" x-model="altText"
                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2 border"
                            placeholder="Describe the image for accessibility">
                 </div>
 
                 <!-- Bucket selector -->
                 <div class="mt-4">
-                    <label class="block text-sm font-medium text-gray-700">Visibility</label>
-                    <select x-model="bucket"
+                    <label for="bucket" class="block text-sm font-medium text-gray-700">Visibility</label>
+                    <select id="bucket" x-model="bucket"
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2 border">
                         <option value="public">Public (direct URL access)</option>
                         <option value="private">Private (signed URL required)</option>
