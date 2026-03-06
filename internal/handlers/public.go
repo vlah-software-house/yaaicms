@@ -83,8 +83,9 @@ func (p *Public) Homepage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(posts) > 0 {
+		siteTitle, slogan := p.loadSiteTitleAndSlogan(tenant.ID, tenant.Name)
 		menus := p.loadMenus(tenant.ID, "")
-		rendered, err := p.engine.RenderPostList(tenant.ID, tenant.Name, posts, p.resolveFeaturedImages(posts), menus)
+		rendered, err := p.engine.RenderPostList(tenant.ID, siteTitle, slogan, posts, p.resolveFeaturedImages(posts), menus)
 		if err == nil {
 			p.pageCache.Set(ctx, cache.HomepageKey(tenant.ID.String()), rendered)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -97,8 +98,9 @@ func (p *Public) Homepage(w http.ResponseWriter, r *http.Request) {
 	// Fall back to a "home" page if it exists.
 	home, err := p.contentStore.FindBySlug(tenant.ID, "home")
 	if err == nil && home != nil {
+		siteTitle, slogan := p.loadSiteTitleAndSlogan(tenant.ID, tenant.Name)
 		menus := p.loadMenus(tenant.ID, "home")
-		rendered, err := p.engine.RenderPage(tenant.ID, tenant.Name, home, p.resolveFeaturedImage(home), p.buildSocialMeta(tenant, home.Type, "/"), menus)
+		rendered, err := p.engine.RenderPage(tenant.ID, siteTitle, slogan, home, p.resolveFeaturedImage(home), p.buildSocialMeta(tenant, home.Type, "/"), menus)
 		if err == nil {
 			p.pageCache.Set(ctx, cache.HomepageKey(tenant.ID.String()), rendered)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -152,8 +154,9 @@ func (p *Public) Page(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	siteTitle, slogan := p.loadSiteTitleAndSlogan(tenant.ID, tenant.Name)
 	menus := p.loadMenus(tenant.ID, slugParam)
-	rendered, err := p.engine.RenderPage(tenant.ID, tenant.Name, content, p.resolveFeaturedImage(content), p.buildSocialMeta(tenant, content.Type, "/"+content.Slug), menus)
+	rendered, err := p.engine.RenderPage(tenant.ID, siteTitle, slogan, content, p.resolveFeaturedImage(content), p.buildSocialMeta(tenant, content.Type, "/"+content.Slug), menus)
 	if err != nil {
 		slog.Error("render page failed", "error", err, "slug", slugParam)
 		// Fall back to a safe error page when the template engine fails.
@@ -310,6 +313,14 @@ func (p *Public) buildSrcsetFromVariants(variants []models.MediaVariant) string 
 		parts = append(parts, fmt.Sprintf("%s %dw", url, v.Width))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// loadSiteTitleAndSlogan fetches the public-facing site title and tagline
+// from site settings. Falls back to tenantName if no title is configured.
+func (p *Public) loadSiteTitleAndSlogan(tenantID uuid.UUID, tenantName string) (string, string) {
+	title, _ := p.siteSettingStore.Get(tenantID, "site_title", tenantName)
+	slogan, _ := p.siteSettingStore.Get(tenantID, "site_tagline", "")
+	return title, slogan
 }
 
 // loadMenus loads all menu locations for a tenant and converts them to

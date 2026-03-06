@@ -71,17 +71,19 @@ type TemplateMenuItem struct {
 type Menus map[string][]TemplateMenuItem
 
 // FragmentData is passed to header/footer fragments so they can render
-// dynamic navigation menus, site name, and current year.
+// dynamic navigation menus, site title, slogan, and current year.
 type FragmentData struct {
-	SiteName string
-	Year     int
-	Menus    Menus
+	SiteTitle string
+	Slogan    string
+	Year      int
+	Menus     Menus
 }
 
 // PageData holds all variables available to a page template when rendering
 // a public page. Template authors (or AI) can use these as {{.Title}}, etc.
 type PageData struct {
-	SiteName            string
+	SiteTitle           string
+	Slogan              string
 	Title               string
 	Body                template.HTML // Content body — raw HTML from editor
 	Excerpt             string
@@ -111,8 +113,9 @@ type PostItem struct {
 
 // ListData holds variables available to the article_loop template.
 type ListData struct {
-	SiteName string
-	Title    string
+	SiteTitle string
+	Slogan    string
+	Title     string
 	Posts    []PostItem
 	Header   template.HTML
 	Footer   template.HTML
@@ -169,14 +172,15 @@ func (e *Engine) InvalidateAllTemplates() {
 // RenderPage renders a content item using the active page template,
 // header, and footer. tenantID scopes the template lookup to the tenant.
 // img holds the featured image data including responsive variants (pass nil if none).
-// siteName overrides the default site name displayed in templates.
+// siteTitle is the public-facing title from Settings; slogan is the tagline.
 // social carries SEO/social meta context; pass nil to skip meta tag injection.
-func (e *Engine) RenderPage(tenantID uuid.UUID, siteName string, content *models.Content, img *FeaturedImage, social *SocialMeta, menus Menus) ([]byte, error) {
-	// Build fragment data for header/footer (menus, site name, year).
+func (e *Engine) RenderPage(tenantID uuid.UUID, siteTitle, slogan string, content *models.Content, img *FeaturedImage, social *SocialMeta, menus Menus) ([]byte, error) {
+	// Build fragment data for header/footer (menus, site title, slogan, year).
 	fragData := &FragmentData{
-		SiteName: siteName,
-		Year:     time.Now().Year(),
-		Menus:    menus,
+		SiteTitle: siteTitle,
+		Slogan:    slogan,
+		Year:      time.Now().Year(),
+		Menus:     menus,
 	}
 
 	// Load active templates for each component.
@@ -222,7 +226,8 @@ func (e *Engine) RenderPage(tenantID uuid.UUID, siteName string, content *models
 	bodyHTML = `<div class="yaaicms-content">` + bodyHTML + `</div>`
 
 	data := PageData{
-		SiteName:    siteName,
+		SiteTitle:   siteTitle,
+		Slogan:      slogan,
 		Title:       content.Title,
 		Body:        template.HTML(bodyHTML),
 		Slug:        content.Slug,
@@ -266,15 +271,16 @@ func (e *Engine) RenderPage(tenantID uuid.UUID, siteName string, content *models
 }
 
 // RenderPostList renders the article_loop template with a list of posts.
-// tenantID scopes the template lookup. siteName overrides the default.
+// tenantID scopes the template lookup. siteTitle and slogan come from Settings.
 // featuredImages maps content ID strings to their featured image data
 // including responsive variants.
-func (e *Engine) RenderPostList(tenantID uuid.UUID, siteName string, posts []models.Content, featuredImages map[string]*FeaturedImage, menus Menus) ([]byte, error) {
-	// Build fragment data for header/footer (menus, site name, year).
+func (e *Engine) RenderPostList(tenantID uuid.UUID, siteTitle, slogan string, posts []models.Content, featuredImages map[string]*FeaturedImage, menus Menus) ([]byte, error) {
+	// Build fragment data for header/footer (menus, site title, slogan, year).
 	fragData := &FragmentData{
-		SiteName: siteName,
-		Year:     time.Now().Year(),
-		Menus:    menus,
+		SiteTitle: siteTitle,
+		Slogan:    slogan,
+		Year:      time.Now().Year(),
+		Menus:     menus,
 	}
 
 	header, err := e.renderFragment(tenantID, models.TemplateTypeHeader, fragData)
@@ -315,8 +321,9 @@ func (e *Engine) RenderPostList(tenantID uuid.UUID, siteName string, posts []mod
 	}
 
 	data := ListData{
-		SiteName: siteName,
-		Title:    "Blog",
+		SiteTitle: siteTitle,
+		Slogan:    slogan,
+		Title:     "Blog",
 		Posts:    postItems,
 		Header:   template.HTML(header),
 		Footer:   template.HTML(footer),

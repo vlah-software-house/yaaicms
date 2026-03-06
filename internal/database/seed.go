@@ -164,7 +164,7 @@ func seedTemplates(db *sql.DB) error {
 			tmplType: "header",
 			html: `<header class="bg-white border-b border-gray-200">
   <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-    <a href="/" class="text-xl font-bold text-indigo-600">{{ .SiteName }}</a>
+    <a href="/" class="text-xl font-bold text-indigo-600">{{ .SiteTitle }}</a>
     <nav class="space-x-4 text-sm text-gray-600">
       {{ range .Menus.main }}<a href="{{ .URL }}"{{ if .Target }} target="{{ .Target }}"{{ end }} class="{{ if .Active }}text-indigo-600 font-semibold{{ else }}hover:text-gray-900{{ end }}">{{ .Label }}</a>
       {{ end }}
@@ -178,7 +178,7 @@ func seedTemplates(db *sql.DB) error {
 			html: `<footer class="bg-gray-50 border-t border-gray-200 mt-12">
   <div class="max-w-5xl mx-auto px-4 py-6 text-center text-sm text-gray-500">
     {{ if .Menus.footer }}<nav class="mb-3 space-x-4">{{ range .Menus.footer }}<a href="{{ .URL }}"{{ if .Target }} target="{{ .Target }}"{{ end }} class="hover:text-gray-700">{{ .Label }}</a>{{ end }}</nav>{{ end }}
-    <p>&copy; {{ .Year }} {{ .SiteName }}. All rights reserved.</p>
+    <p>&copy; {{ .Year }} {{ .SiteTitle }}. All rights reserved.</p>
     {{ if .Menus.footer_legal }}<nav class="mt-2 space-x-3 text-xs">{{ range .Menus.footer_legal }}<a href="{{ .URL }}"{{ if .Target }} target="{{ .Target }}"{{ end }} class="hover:text-gray-700">{{ .Label }}</a>{{ end }}</nav>{{ end }}
   </div>
 </footer>`,
@@ -191,7 +191,7 @@ func seedTemplates(db *sql.DB) error {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ .Title }} — {{ .SiteName }}</title>
+  <title>{{ .Title }} — {{ .SiteTitle }}</title>
   {{ if .MetaDescription }}<meta name="description" content="{{ .MetaDescription }}">{{ end }}
   {{ if .MetaKeywords }}<meta name="keywords" content="{{ .MetaKeywords }}">{{ end }}
   <script src="https://cdn.tailwindcss.com"></script>
@@ -214,7 +214,7 @@ func seedTemplates(db *sql.DB) error {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ .Title }} — {{ .SiteName }}</title>
+  <title>{{ .Title }} — {{ .SiteTitle }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-white text-gray-900 min-h-screen flex flex-col">

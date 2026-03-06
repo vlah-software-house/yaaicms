@@ -398,7 +398,7 @@ func TestAITemplateGenerate_EmptyPrompt_Returns400(t *testing.T) {
 
 func TestAITemplateGenerate_ValidPrompt_ReturnsJSON(t *testing.T) {
 	env := newTestEnv(t)
-	setMockAIResponse(env, `<header class="bg-white p-4"><nav>{{.SiteName}}</nav></header>`, nil)
+	setMockAIResponse(env, `<header class="bg-white p-4"><nav>{{.SiteTitle}}</nav></header>`, nil)
 
 	form := url.Values{}
 	form.Set("prompt", "Create a simple header with nav")
@@ -454,12 +454,12 @@ func TestAITemplateGenerate_InvalidSyntax(t *testing.T) {
 
 func TestAITemplateGenerate_WithCurrentHTML(t *testing.T) {
 	env := newTestEnv(t)
-	setMockAIResponse(env, `<header class="updated">{{.SiteName}}</header>`, nil)
+	setMockAIResponse(env, `<header class="updated">{{.SiteTitle}}</header>`, nil)
 
 	form := url.Values{}
 	form.Set("prompt", "Make it blue")
 	form.Set("template_type", "header")
-	form.Set("current_html", `<header>{{.SiteName}}</header>`)
+	form.Set("current_html", `<header>{{.SiteTitle}}</header>`)
 	req := httptest.NewRequest(http.MethodPost, "/admin/ai/template-generate", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -476,7 +476,7 @@ func TestAITemplateGenerate_WithCurrentHTML(t *testing.T) {
 
 func TestAITemplateGenerate_WithChatHistory(t *testing.T) {
 	env := newTestEnv(t)
-	setMockAIResponse(env, `<header>{{.SiteName}}</header>`, nil)
+	setMockAIResponse(env, `<header>{{.SiteTitle}}</header>`, nil)
 
 	form := url.Values{}
 	form.Set("prompt", "Now add a logo")
@@ -561,7 +561,7 @@ func TestAITemplateSave_ValidTemplate(t *testing.T) {
 	form := url.Values{}
 	form.Set("name", name)
 	form.Set("type", string(models.TemplateTypeHeader))
-	form.Set("html_content", "<header>{{.SiteName}}</header>")
+	form.Set("html_content", "<header>{{.SiteTitle}}</header>")
 	req := httptest.NewRequest(http.MethodPost, "/admin/ai/template-save", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 

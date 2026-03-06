@@ -222,8 +222,8 @@ func TestBuildTemplateSystemPrompt(t *testing.T) {
 		tmplType string
 		contains []string
 	}{
-		{"header", []string{"SiteName", "Year", "TEMPLATE TYPE: Header"}},
-		{"footer", []string{"SiteName", "Year", "TEMPLATE TYPE: Footer"}},
+		{"header", []string{"SiteTitle", "Slogan", "Year", "TEMPLATE TYPE: Header"}},
+		{"footer", []string{"SiteTitle", "Slogan", "Year", "TEMPLATE TYPE: Footer"}},
 		{"page", []string{"Title", "Body", "Header", "Footer", "MetaDescription", "TEMPLATE TYPE: Page"}},
 		{"article_loop", []string{"range .Posts", "Title", "Slug", "Excerpt", "TEMPLATE TYPE: Article Loop"}},
 	}
@@ -248,8 +248,8 @@ func TestBuildPreviewData(t *testing.T) {
 	// Page preview should return PageData.
 	pageData := buildPreviewData("page")
 	if pd, ok := pageData.(engine.PageData); ok {
-		if pd.SiteName != "YaaiCMS" {
-			t.Errorf("page SiteName: got %q", pd.SiteName)
+		if pd.SiteTitle != "YaaiCMS" {
+			t.Errorf("page SiteTitle: got %q", pd.SiteTitle)
 		}
 		if pd.Title == "" {
 			t.Error("page Title should not be empty")
@@ -268,7 +268,7 @@ func TestBuildPreviewData(t *testing.T) {
 		t.Errorf("article_loop preview should return engine.ListData, got %T", listData)
 	}
 
-	// Header/footer should return a struct with SiteName and Year.
+	// Header/footer should return a struct with SiteTitle, Slogan, and Year.
 	headerData := buildPreviewData("header")
 	if headerData == nil {
 		t.Error("header preview should not be nil")

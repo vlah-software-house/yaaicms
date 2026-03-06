@@ -473,7 +473,7 @@ func TestTemplateCreate_ValidData_Redirects(t *testing.T) {
 	form := url.Values{}
 	form.Set("name", tmplName)
 	form.Set("type", "header")
-	form.Set("html_content", "<header><nav>{{.SiteName}}</nav></header>")
+	form.Set("html_content", "<header><nav>{{.SiteTitle}}</nav></header>")
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/templates/create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

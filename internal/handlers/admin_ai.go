@@ -1162,9 +1162,10 @@ func (a *Admin) AIRestylePreview(w http.ResponseWriter, r *http.Request) {
 
 	// Render header and footer templates to get their HTML output.
 	headerData := struct {
-		SiteName string
-		Year     int
-	}{SiteName: "YaaiCMS", Year: time.Now().Year()}
+		SiteTitle string
+		Slogan    string
+		Year      int
+	}{SiteTitle: "YaaiCMS", Slogan: "Your AI-powered CMS", Year: time.Now().Year()}
 
 	renderedHeader := ""
 	if req.HeaderHTML != "" {
@@ -1364,7 +1365,8 @@ func (a *Admin) buildRealPagePreview(contentID string) any {
 	}
 
 	data := engine.PageData{
-		SiteName:    "YaaiCMS",
+		SiteTitle:   "YaaiCMS",
+		Slogan:      "Your AI-powered CMS",
 		Title:       content.Title,
 		Body:        template.HTML(bodyHTML),
 		Slug:        content.Slug,
@@ -1459,8 +1461,9 @@ func (a *Admin) buildRealArticleLoopPreview(tenantID uuid.UUID) any {
 	}
 
 	return engine.ListData{
-		SiteName: "YaaiCMS",
-		Title:    "Blog",
+		SiteTitle: "YaaiCMS",
+		Slogan:    "Your AI-powered CMS",
+		Title:     "Blog",
 		Posts:    postItems,
 		Header:   "<header class='bg-gray-800 text-white p-4'><nav class='max-w-6xl mx-auto flex justify-between items-center'><span class='text-xl font-bold'>YaaiCMS</span><div class='space-x-4'><a href='/' class='hover:text-gray-300'>Home</a><a href='/blog' class='hover:text-gray-300'>Blog</a></div></nav></header>",
 		Footer:   "<footer class='bg-gray-800 text-gray-400 p-6 text-center text-sm'>&copy; 2026 YaaiCMS. All rights reserved.</footer>",
@@ -1511,9 +1514,13 @@ The header is a reusable fragment injected at the top of every page via {{.Heade
 It should NOT include <html>, <head>, or <body> tags — just the header/nav markup.
 
 AVAILABLE VARIABLES:
-- {{.SiteName}} (string, always set)
-  The site's display name, e.g., "My Blog" or "YaaiCMS".
+- {{.SiteTitle}} (string, always set)
+  The site's public title, e.g., "My Blog" or "Acme Corp".
   Use as the logo text or brand name in the navigation bar.
+
+- {{.Slogan}} (string, may be empty)
+  The site's tagline or slogan, e.g., "Just another SmartPress site".
+  Display below or beside the site title if set: {{if .Slogan}}<span>{{.Slogan}}</span>{{end}}
 
 - {{.Year}} (int, always set)
   The current calendar year (e.g., 2026).
@@ -1528,7 +1535,8 @@ AVAILABLE VARIABLES:
   the main navigation. Users manage these links through the admin Menus page.
 
 DESIGN GUIDELINES:
-- Include a prominent site name/logo linking to "/" (the homepage).
+- Include a prominent site title/logo linking to "/" (the homepage).
+- Optionally show the slogan near the title if set.
 - Render navigation from {{range .Menus.main}} — do NOT hardcode any nav links.
 - Support dropdown menus for items with {{.Children}} (one level of nesting).
 - Make the header responsive: hamburger menu or collapsible nav on mobile.
@@ -1543,11 +1551,14 @@ The footer is a reusable fragment injected at the bottom of every page via {{.Fo
 It should NOT include <html>, <head>, or <body> tags — just the footer markup.
 
 AVAILABLE VARIABLES:
-- {{.SiteName}} (string, always set)
-  The site's display name. Use in the copyright line.
+- {{.SiteTitle}} (string, always set)
+  The site's public title. Use in the copyright line.
+
+- {{.Slogan}} (string, may be empty)
+  The site's tagline or slogan. Optionally display in the footer.
 
 - {{.Year}} (int, always set)
-  The current year. Use for "© 2026 SiteName" copyright notices.
+  The current year. Use for "© 2026 SiteTitle" copyright notices.
 
 - {{range .Menus.footer}} — Footer navigation links
   Each item has: {{.Label}}, {{.URL}}, {{.Target}}
@@ -1560,7 +1571,7 @@ AVAILABLE VARIABLES:
   IMPORTANT: NEVER hardcode footer legal links. Always use {{range .Menus.footer_legal}}.
 
 DESIGN GUIDELINES:
-- Include a copyright notice: "© {{.Year}} {{.SiteName}}. All rights reserved."
+- Include a copyright notice: "© {{.Year}} {{.SiteTitle}}. All rights reserved."
 - Render footer navigation from {{range .Menus.footer}} — do NOT hardcode any nav links.
 - Render legal links from {{range .Menus.footer_legal}} in a separate row or section.
 - Keep it compact — footers should complement, not compete with content.
@@ -1642,8 +1653,11 @@ SEO metadata (for <head>):
   Use: {{if .MetaKeywords}}<meta name="keywords" content="{{.MetaKeywords}}">{{end}}
 
 Site-level:
-- {{.SiteName}} (string, always set)
-  The site name. Use in <title>: <title>{{.Title}} | {{.SiteName}}</title>
+- {{.SiteTitle}} (string, always set)
+  The site's public title. Use in <title>: <title>{{.Title}} | {{.SiteTitle}}</title>
+
+- {{.Slogan}} (string, may be empty)
+  The site's tagline. Rarely needed in page templates but available.
 
 - {{.Year}} (int, always set)
   Current year. Available but rarely needed in page templates (footer handles copyright).
@@ -1668,7 +1682,8 @@ AVAILABLE VARIABLES:
 Layout:
 - {{.Header}} (template.HTML) — Pre-rendered site header. Place at top of <body>.
 - {{.Footer}} (template.HTML) — Pre-rendered site footer. Place at bottom of <body>.
-- {{.SiteName}} (string) — Site name, for <title> tag.
+- {{.SiteTitle}} (string) — Site title, for <title> tag.
+- {{.Slogan}} (string, may be empty) — Site tagline.
 - {{.Year}} (int) — Current year.
 - {{.Title}} (string) — Page title, typically "Blog" or "Posts". Display as <h1>.
 
@@ -1741,7 +1756,8 @@ func buildPreviewData(tmplType string) any {
 	switch tmplType {
 	case "page":
 		return engine.PageData{
-			SiteName:            "YaaiCMS",
+			SiteTitle:           "YaaiCMS",
+			Slogan:              "Your AI-powered CMS",
 			Title:               "Preview Page Title",
 			Body:                "<p>This is preview content. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>",
 			Excerpt:             "A brief preview excerpt for the page.",
@@ -1762,8 +1778,9 @@ func buildPreviewData(tmplType string) any {
 		}
 	case "article_loop":
 		return engine.ListData{
-			SiteName: "YaaiCMS",
-			Title:    "Blog",
+			SiteTitle: "YaaiCMS",
+			Slogan:    "Your AI-powered CMS",
+			Title:     "Blog",
 			Posts: []engine.PostItem{
 				{Title: "Getting Started with YaaiCMS", Slug: "getting-started", Excerpt: "Learn how to set up your YaaiCMS CMS and create your first blog post.", FeaturedImageURL: "https://placehold.co/800x450/0f172a/e2e8f0?text=Post+1", FeaturedImageSrcset: "https://placehold.co/640x360/0f172a/e2e8f0?text=640w 640w, https://placehold.co/800x450/0f172a/e2e8f0?text=800w 800w", FeaturedImageAlt: "Getting started guide", PublishedAt: "February 25, 2026"},
 				{Title: "Building Modern Websites", Slug: "modern-websites", Excerpt: "Discover the latest techniques for building fast, responsive websites.", FeaturedImageURL: "https://placehold.co/800x450/1e3a5f/e2e8f0?text=Post+2", FeaturedImageSrcset: "https://placehold.co/640x360/1e3a5f/e2e8f0?text=640w 640w, https://placehold.co/800x450/1e3a5f/e2e8f0?text=800w 800w", FeaturedImageAlt: "Modern website design", PublishedAt: "February 24, 2026"},
@@ -1781,8 +1798,9 @@ func buildPreviewData(tmplType string) any {
 	default:
 		// Header and footer use FragmentData with sample menus for preview.
 		return engine.FragmentData{
-			SiteName: "YaaiCMS",
-			Year:     2026,
+			SiteTitle: "YaaiCMS",
+			Slogan:    "Your AI-powered CMS",
+			Year:      2026,
 			Menus: engine.Menus{
 				"main": {
 					{Label: "Home", URL: "/", Active: true},
