@@ -1,0 +1,35 @@
+# Copyright (c) 2026 Madalin Gabriel Ignisca <hi@madalin.me>
+# Copyright (c) 2026 Vlah Software House SRL <contact@vlah.sh>
+# All rights reserved. See LICENSE for details.
+
+name: golangci-lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  golangci-lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+
+      - name: Install libvips (CGO dependency for image processing)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libvips-dev
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.11
+          only-new-issues: true

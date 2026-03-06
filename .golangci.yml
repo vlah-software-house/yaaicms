@@ -1,0 +1,159 @@
+# Copyright (c) 2026 Madalin Gabriel Ignisca <hi@madalin.me>
+# Copyright (c) 2026 Vlah Software House SRL <contact@vlah.sh>
+# All rights reserved. See LICENSE for details.
+
+version: "2"
+
+linters:
+  default: all
+  disable:
+    # Frameworks we don't use
+    - ginkgolinter    # Ginkgo testing framework
+    - protogetter     # Protobuf
+    - testifylint     # testify assertions
+
+    # Require explicit config that would fail without it
+    - depguard        # needs allow/deny import lists
+    - goheader        # needs license header template
+    - forbidigo       # needs forbidden function list
+
+    # Too noisy / opinionated — revisit individually later
+    - exhaustruct     # requires ALL struct fields in literals
+    - wsl             # aggressive whitespace formatting rules (v1 name)
+    - wsl_v5          # aggressive whitespace formatting rules (v2 name)
+    - nlreturn        # blank line before every return
+    - varnamelen      # forbids short var names (r, w, t, id)
+    - mnd             # magic number detector (HTTP codes, ports, etc.)
+    - lll             # line length limit (HTML in Go strings)
+    - godox           # warns on TODO/FIXME comments
+    - ireturn         # forbids returning interfaces
+    - gomoddirectives # restricts go.mod directives
+    - tagalign        # struct tag alignment
+    - tagliatelle     # struct tag naming convention (camelCase vs snake_case)
+    - paralleltest    # requires t.Parallel() in every test
+    - tparallel       # same as paralleltest, different checks
+    - testpackage     # requires _test package separation
+    - gochecknoglobals # package-level vars are idiomatic in Go
+    - gochecknoinits  # init() is idiomatic in Go
+    - funcorder       # function ordering in files — too rigid
+    - wrapcheck       # requires wrapping all external errors
+    - err113          # requires static sentinel errors everywhere
+    - noctx           # requires context on all HTTP requests
+    - godoclint       # doc comment formatting — too strict
+
+  settings:
+    cyclop:
+      max-complexity: 20
+
+    funlen:
+      lines: 120
+      statements: 60
+
+    gocognit:
+      min-complexity: 30
+
+    gocyclo:
+      min-complexity: 20
+
+    nestif:
+      min-complexity: 6
+
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+        - opinionated
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: var-declaration
+        - name: var-naming
+
+    dupl:
+      threshold: 150
+
+    nakedret:
+      max-func-lines: 30
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+
+    gosec:
+      excludes:
+        - G104  # unhandled errors (covered by errcheck)
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # struct field ordering for memory — hurts readability
+
+    staticcheck:
+      checks:
+        - all
+
+  exclusions:
+    rules:
+      # Test files get relaxed rules
+      - path: _test\.go
+        linters:
+          - dupl
+          - funlen
+          - gocognit
+          - gocyclo
+          - cyclop
+          - goconst
+          - maintidx
+          - containedctx
+          - forcetypeassert
+          - errcheck
+          - gosec
+          - noinlineerr
+
+      # Migration SQL files embedded as strings
+      - path: internal/database/
+        linters:
+          - dupword
+
+      # Handler files have repetitive CRUD patterns
+      - path: internal/handlers/
+        linters:
+          - dupl
+
+      # Canonical headers: HTMX uses HX-* and APIs use their own conventions
+      - linters:
+          - canonicalheader
+        text: "non-canonical header"
+
+    paths:
+      - third_party
+      - vendor
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+output:
+  sort-order:
+    - linter
+    - file
