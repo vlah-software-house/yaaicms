@@ -992,7 +992,7 @@ func (a *Admin) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a revision snapshot of the old state before persisting the update.
-	if a.templateRevisionStore != nil && sess != nil {
+	if a.templateRevisionStore != nil {
 		rev := &models.TemplateRevision{
 			TemplateID:    item.ID,
 			Name:          oldName,
