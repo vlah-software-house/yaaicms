@@ -343,6 +343,7 @@ func (a *Admin) createContent(w http.ResponseWriter, r *http.Request, contentTyp
 
 // editContent renders the edit form for a content item.
 func (a *Admin) editContent(w http.ResponseWriter, r *http.Request, section string) {
+	sess := middleware.SessionFromCtx(r.Context())
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -350,7 +351,7 @@ func (a *Admin) editContent(w http.ResponseWriter, r *http.Request, section stri
 		return
 	}
 
-	item, err := a.contentStore.FindByID(id)
+	item, err := a.contentStore.FindByID(sess.TenantID, id)
 	if err != nil || item == nil {
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
@@ -371,7 +372,7 @@ func (a *Admin) editContent(w http.ResponseWriter, r *http.Request, section stri
 
 	// Resolve featured image URL for display in the form.
 	if item.FeaturedImageID != nil && a.mediaStore != nil && a.storageClient != nil {
-		if media, err := a.mediaStore.FindByID(*item.FeaturedImageID); err == nil && media != nil {
+		if media, err := a.mediaStore.FindByID(sess.TenantID, *item.FeaturedImageID); err == nil && media != nil {
 			if media.Bucket == a.storageClient.PublicBucket() {
 				data["FeaturedImageURL"] = a.storageClient.FileURL(media.S3Key)
 			}
@@ -391,7 +392,6 @@ func (a *Admin) editContent(w http.ResponseWriter, r *http.Request, section stri
 
 	// Load categories for the category selector (posts only).
 	if contentType == "post" {
-		sess := middleware.SessionFromCtx(r.Context())
 		categories, _ := a.categoryStore.FlatTree(sess.TenantID)
 		data["Categories"] = categories
 	}
@@ -406,6 +406,7 @@ func (a *Admin) editContent(w http.ResponseWriter, r *http.Request, section stri
 // updateContent handles the edit form submission for a content item.
 // Before applying changes, it snapshots the current state as a revision.
 func (a *Admin) updateContent(w http.ResponseWriter, r *http.Request, section string) {
+	sess := middleware.SessionFromCtx(r.Context())
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -413,7 +414,7 @@ func (a *Admin) updateContent(w http.ResponseWriter, r *http.Request, section st
 		return
 	}
 
-	item, err := a.contentStore.FindByID(id)
+	item, err := a.contentStore.FindByID(sess.TenantID, id)
 	if err != nil || item == nil {
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
@@ -516,7 +517,6 @@ func (a *Admin) updateContent(w http.ResponseWriter, r *http.Request, section st
 	}
 
 	// Create revision snapshot of the OLD state before persisting changes.
-	sess := middleware.SessionFromCtx(r.Context())
 	rev := &models.ContentRevision{
 		ContentID:       item.ID,
 		Title:           oldTitle,
@@ -649,6 +649,7 @@ Be concise and factual. Output ONLY the bullet points, nothing else.`
 // RevisionRestore restores a content item to the state captured in a revision.
 // Returns an HTML fragment that triggers a page redirect via HTMX.
 func (a *Admin) RevisionRestore(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
 	revIDStr := chi.URLParam(r, "revisionID")
 	revID, err := uuid.Parse(revIDStr)
 	if err != nil {
@@ -663,14 +664,13 @@ func (a *Admin) RevisionRestore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load the content item to check it exists and to create a "pre-restore" revision.
-	item, err := a.contentStore.FindByID(rev.ContentID)
+	item, err := a.contentStore.FindByID(sess.TenantID, rev.ContentID)
 	if err != nil || item == nil {
 		http.Error(w, "Content not found", http.StatusNotFound)
 		return
 	}
 
 	// Create a revision of the current state before restoring.
-	sess := middleware.SessionFromCtx(r.Context())
 	preRestore := &models.ContentRevision{
 		ContentID:       item.ID,
 		Title:           item.Title,
@@ -793,9 +793,9 @@ func (a *Admin) deleteContent(w http.ResponseWriter, r *http.Request, section st
 	}
 
 	// Look up the slug before deleting so we can invalidate its cache entry.
-	item, _ := a.contentStore.FindByID(id)
+	item, _ := a.contentStore.FindByID(sess.TenantID, id)
 
-	if err := a.contentStore.Delete(id); err != nil {
+	if err := a.contentStore.Delete(sess.TenantID, id); err != nil {
 		slog.Error("delete content failed", "error", err)
 	} else if item != nil {
 		a.invalidateContentCache(r.Context(), sess.TenantID, id, item.Slug, "delete")
@@ -919,6 +919,7 @@ func (a *Admin) TemplateCreate(w http.ResponseWriter, r *http.Request) {
 
 // TemplateEdit renders the edit template form.
 func (a *Admin) TemplateEdit(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -926,7 +927,7 @@ func (a *Admin) TemplateEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := a.templateStore.FindByID(id)
+	item, err := a.templateStore.FindByID(sess.TenantID, id)
 	if err != nil || item == nil {
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
@@ -954,6 +955,7 @@ func (a *Admin) TemplateEdit(w http.ResponseWriter, r *http.Request) {
 
 // TemplateUpdate handles the edit template form submission.
 func (a *Admin) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -961,7 +963,7 @@ func (a *Admin) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := a.templateStore.FindByID(id)
+	item, err := a.templateStore.FindByID(sess.TenantID, id)
 	if err != nil || item == nil {
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
@@ -990,8 +992,7 @@ func (a *Admin) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a revision snapshot of the old state before persisting the update.
-	sess := middleware.SessionFromCtx(r.Context())
-	if a.templateRevisionStore != nil && sess != nil {
+	if a.templateRevisionStore != nil {
 		rev := &models.TemplateRevision{
 			TemplateID:    item.ID,
 			Name:          oldName,
@@ -1050,7 +1051,7 @@ func (a *Admin) TemplateDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.templateStore.Delete(id); err != nil {
+	if err := a.templateStore.Delete(sess.TenantID, id); err != nil {
 		slog.Error("delete template failed", "error", err)
 	} else {
 		a.invalidateTemplateCache(r.Context(), sess.TenantID, id, "delete")
@@ -1106,6 +1107,7 @@ func (a *Admin) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 
 // TemplateRevisionRestore restores a template to the state captured in a revision.
 func (a *Admin) TemplateRevisionRestore(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
 	revIDStr := chi.URLParam(r, "revisionID")
 	revID, err := uuid.Parse(revIDStr)
 	if err != nil {
@@ -1113,21 +1115,20 @@ func (a *Admin) TemplateRevisionRestore(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	rev, err := a.templateRevisionStore.FindByID(revID)
+	rev, err := a.templateRevisionStore.FindByID(sess.TenantID, revID)
 	if err != nil || rev == nil {
 		http.Error(w, "Revision not found", http.StatusNotFound)
 		return
 	}
 
 	// Load the template to check it exists and to create a "pre-restore" snapshot.
-	item, err := a.templateStore.FindByID(rev.TemplateID)
+	item, err := a.templateStore.FindByID(sess.TenantID, rev.TemplateID)
 	if err != nil || item == nil {
 		http.Error(w, "Template not found", http.StatusNotFound)
 		return
 	}
 
 	// Create a revision of the current state before restoring.
-	sess := middleware.SessionFromCtx(r.Context())
 	preRestore := &models.TemplateRevision{
 		TemplateID:    item.ID,
 		Name:          item.Name,
@@ -1163,6 +1164,7 @@ func (a *Admin) TemplateRevisionRestore(w http.ResponseWriter, r *http.Request) 
 
 // TemplateRevisionUpdateTitle updates a template revision's user-provided title.
 func (a *Admin) TemplateRevisionUpdateTitle(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
 	revIDStr := chi.URLParam(r, "revisionID")
 	revID, err := uuid.Parse(revIDStr)
 	if err != nil {
@@ -1170,7 +1172,7 @@ func (a *Admin) TemplateRevisionUpdateTitle(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	rev, err := a.templateRevisionStore.FindByID(revID)
+	rev, err := a.templateRevisionStore.FindByID(sess.TenantID, revID)
 	if err != nil || rev == nil {
 		http.Error(w, "Revision not found", http.StatusNotFound)
 		return
@@ -1537,6 +1539,7 @@ func (a *Admin) CategoryCreate(w http.ResponseWriter, r *http.Request) {
 
 // CategoryUpdate handles updating an existing category.
 func (a *Admin) CategoryUpdate(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -1544,7 +1547,7 @@ func (a *Admin) CategoryUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cat, err := a.categoryStore.FindByID(id)
+	cat, err := a.categoryStore.FindByID(sess.TenantID, id)
 	if err != nil || cat == nil {
 		http.Error(w, "Category not found", http.StatusNotFound)
 		return
@@ -1575,6 +1578,7 @@ func (a *Admin) CategoryUpdate(w http.ResponseWriter, r *http.Request) {
 
 // CategoryDelete handles deleting a category.
 func (a *Admin) CategoryDelete(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -1582,7 +1586,7 @@ func (a *Admin) CategoryDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.categoryStore.Delete(id); err != nil {
+	if err := a.categoryStore.Delete(sess.TenantID, id); err != nil {
 		slog.Error("delete category failed", "error", err)
 		http.Error(w, "Failed to delete category", http.StatusInternalServerError)
 		return

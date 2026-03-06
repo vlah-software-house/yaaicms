@@ -1084,6 +1084,7 @@ func (a *Admin) AIThemeDeactivate(w http.ResponseWriter, r *http.Request) {
 
 // AIThemeDelete removes a design theme (cannot delete active).
 func (a *Admin) AIThemeDelete(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -1091,7 +1092,7 @@ func (a *Admin) AIThemeDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.themeStore.Delete(id); err != nil {
+	if err := a.themeStore.Delete(sess.TenantID, id); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -1325,7 +1326,7 @@ func (a *Admin) AIPreviewContentList(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) buildRealPreviewData(tenantID uuid.UUID, tmplType string, contentID string) any {
 	switch tmplType {
 	case "page":
-		return a.buildRealPagePreview(contentID)
+		return a.buildRealPagePreview(tenantID, contentID)
 	case "article_loop":
 		return a.buildRealArticleLoopPreview(tenantID)
 	default:
@@ -1336,13 +1337,13 @@ func (a *Admin) buildRealPreviewData(tenantID uuid.UUID, tmplType string, conten
 
 // buildRealPagePreview fetches a content item and its featured image,
 // then assembles PageData for template preview rendering.
-func (a *Admin) buildRealPagePreview(contentID string) any {
+func (a *Admin) buildRealPagePreview(tenantID uuid.UUID, contentID string) any {
 	id, err := uuid.Parse(contentID)
 	if err != nil {
 		return nil
 	}
 
-	content, err := a.contentStore.FindByID(id)
+	content, err := a.contentStore.FindByID(tenantID, id)
 	if err != nil || content == nil {
 		return nil
 	}
@@ -1388,7 +1389,7 @@ func (a *Admin) buildRealPagePreview(contentID string) any {
 
 	// Resolve featured image if available.
 	if content.FeaturedImageID != nil && a.mediaStore != nil && a.storageClient != nil {
-		media, err := a.mediaStore.FindByID(*content.FeaturedImageID)
+		media, err := a.mediaStore.FindByID(tenantID, *content.FeaturedImageID)
 		if err == nil && media != nil && media.Bucket == a.storageClient.PublicBucket() {
 			data.FeaturedImageURL = a.storageClient.FileURL(media.S3Key)
 			if media.AltText != nil {
@@ -1446,7 +1447,7 @@ func (a *Admin) buildRealArticleLoopPreview(tenantID uuid.UUID) any {
 
 		// Resolve featured image.
 		if p.FeaturedImageID != nil && a.mediaStore != nil && a.storageClient != nil {
-			media, err := a.mediaStore.FindByID(*p.FeaturedImageID)
+			media, err := a.mediaStore.FindByID(tenantID, *p.FeaturedImageID)
 			if err == nil && media != nil && media.Bucket == a.storageClient.PublicBucket() {
 				item.FeaturedImageURL = a.storageClient.FileURL(media.S3Key)
 				if media.AltText != nil {

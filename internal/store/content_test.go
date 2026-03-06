@@ -62,7 +62,7 @@ func TestContentStoreCreateAndFind(t *testing.T) {
 	}
 
 	// FindByID.
-	found, err := s.FindByID(created.ID)
+	found, err := s.FindByID(testContentTenantID, created.ID)
 	if err != nil {
 		t.Fatalf("FindByID: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestContentStoreUpdate(t *testing.T) {
 		t.Fatalf("Update: %v", err)
 	}
 
-	found, _ := s.FindByID(created.ID)
+	found, _ := s.FindByID(testContentTenantID, created.ID)
 	if found.Title != "Updated Title" {
 		t.Errorf("title: got %q, want %q", found.Title, "Updated Title")
 	}
@@ -224,11 +224,11 @@ func TestContentStoreDelete(t *testing.T) {
 		Body: "body", Status: models.ContentStatusDraft, AuthorID: authorID,
 	})
 
-	if err := s.Delete(created.ID); err != nil {
+	if err := s.Delete(testContentTenantID, created.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	found, _ := s.FindByID(created.ID)
+	found, _ := s.FindByID(testContentTenantID, created.ID)
 	if found != nil {
 		t.Error("expected nil after delete")
 	}

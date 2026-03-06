@@ -50,6 +50,8 @@ func (a *Admin) MenusPage(w http.ResponseWriter, r *http.Request) {
 
 // MenuItemCreate handles creating a new menu item.
 func (a *Admin) MenuItemCreate(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+
 	menuIDStr := strings.TrimSpace(r.FormValue("menu_id"))
 	menuID, err := uuid.Parse(menuIDStr)
 	if err != nil {
@@ -75,7 +77,7 @@ func (a *Admin) MenuItemCreate(w http.ResponseWriter, r *http.Request) {
 		if cid, err := uuid.Parse(contentIDStr); err == nil {
 			item.ContentID = &cid
 			// Resolve URL from content slug as a default.
-			if content, err := a.contentStore.FindByID(cid); err == nil && content != nil {
+			if content, err := a.contentStore.FindByID(sess.TenantID, cid); err == nil && content != nil {
 				item.URL = "/" + content.Slug
 			}
 		}
@@ -106,6 +108,8 @@ func (a *Admin) MenuItemCreate(w http.ResponseWriter, r *http.Request) {
 
 // MenuItemUpdate handles updating an existing menu item.
 func (a *Admin) MenuItemUpdate(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -113,7 +117,7 @@ func (a *Admin) MenuItemUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := a.menuStore.FindItemByID(id)
+	item, err := a.menuStore.FindItemByID(sess.TenantID, id)
 	if err != nil || item == nil {
 		http.Error(w, "Menu item not found", http.StatusNotFound)
 		return
@@ -133,7 +137,7 @@ func (a *Admin) MenuItemUpdate(w http.ResponseWriter, r *http.Request) {
 	if contentIDStr := strings.TrimSpace(r.FormValue("content_id")); contentIDStr != "" {
 		if cid, err := uuid.Parse(contentIDStr); err == nil {
 			item.ContentID = &cid
-			if content, err := a.contentStore.FindByID(cid); err == nil && content != nil {
+			if content, err := a.contentStore.FindByID(sess.TenantID, cid); err == nil && content != nil {
 				item.URL = "/" + content.Slug
 			}
 		}
@@ -141,7 +145,7 @@ func (a *Admin) MenuItemUpdate(w http.ResponseWriter, r *http.Request) {
 		item.ContentID = nil
 	}
 
-	if err := a.menuStore.UpdateItem(item); err != nil {
+	if err := a.menuStore.UpdateItem(sess.TenantID, item); err != nil {
 		slog.Error("update menu item failed", "error", err)
 		http.Error(w, "Failed to update menu item", http.StatusInternalServerError)
 		return
@@ -154,6 +158,7 @@ func (a *Admin) MenuItemUpdate(w http.ResponseWriter, r *http.Request) {
 
 // MenuItemDelete handles deleting a menu item.
 func (a *Admin) MenuItemDelete(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -161,7 +166,7 @@ func (a *Admin) MenuItemDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.menuStore.DeleteItem(id); err != nil {
+	if err := a.menuStore.DeleteItem(sess.TenantID, id); err != nil {
 		slog.Error("delete menu item failed", "error", err)
 		http.Error(w, "Failed to delete menu item", http.StatusInternalServerError)
 		return

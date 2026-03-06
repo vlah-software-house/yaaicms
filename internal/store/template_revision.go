@@ -79,13 +79,15 @@ func (s *TemplateRevisionStore) ListByTemplateID(templateID uuid.UUID) ([]*model
 	return revisions, rows.Err()
 }
 
-// FindByID returns a single template revision by its ID.
-func (s *TemplateRevisionStore) FindByID(id uuid.UUID) (*models.TemplateRevision, error) {
+// FindByID returns a single template revision by its ID, scoped to a tenant
+// via the parent template's tenant_id.
+func (s *TemplateRevisionStore) FindByID(tenantID, id uuid.UUID) (*models.TemplateRevision, error) {
 	row := s.db.QueryRow(`
 		SELECT `+templateRevisionColumns+`
 		FROM template_revisions
 		WHERE id = $1
-	`, id)
+		  AND template_id IN (SELECT id FROM templates WHERE tenant_id = $2)
+	`, id, tenantID)
 	r, err := scanTemplateRevision(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

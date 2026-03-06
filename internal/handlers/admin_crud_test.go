@@ -211,7 +211,7 @@ func TestPostDelete_Redirects(t *testing.T) {
 	}
 
 	// Verify the post was actually deleted.
-	item, err := env.ContentStore.FindByID(created.ID)
+	item, err := env.ContentStore.FindByID(testTenantID, created.ID)
 	if err != nil {
 		t.Fatalf("FindByID after delete: %v", err)
 	}
@@ -432,7 +432,7 @@ func TestPageDelete_Redirects(t *testing.T) {
 	}
 
 	// Verify deletion.
-	found, _ := env.ContentStore.FindByID(page.ID)
+	found, _ := env.ContentStore.FindByID(testTenantID, page.ID)
 	if found != nil {
 		t.Error("expected page to be deleted")
 	}

@@ -170,17 +170,17 @@ func (s *TenantDomainStore) SetVerified(id uuid.UUID) error {
 }
 
 // Delete removes a custom domain mapping.
-func (s *TenantDomainStore) Delete(id uuid.UUID) error {
-	_, err := s.db.Exec(`DELETE FROM tenant_domains WHERE id = $1`, id)
+func (s *TenantDomainStore) Delete(tenantID, id uuid.UUID) error {
+	_, err := s.db.Exec(`DELETE FROM tenant_domains WHERE id = $1 AND tenant_id = $2`, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("delete tenant domain: %w", err)
 	}
 	return nil
 }
 
-// FindByID retrieves a tenant domain by its UUID. Returns nil if not found.
-func (s *TenantDomainStore) FindByID(id uuid.UUID) (*models.TenantDomain, error) {
-	row := s.db.QueryRow(`SELECT `+tenantDomainColumns+` FROM tenant_domains WHERE id = $1`, id)
+// FindByID retrieves a tenant domain by its UUID within a tenant. Returns nil if not found.
+func (s *TenantDomainStore) FindByID(tenantID, id uuid.UUID) (*models.TenantDomain, error) {
+	row := s.db.QueryRow(`SELECT `+tenantDomainColumns+` FROM tenant_domains WHERE id = $1 AND tenant_id = $2`, id, tenantID)
 	d, err := scanTenantDomain(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

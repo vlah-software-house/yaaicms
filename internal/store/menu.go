@@ -154,9 +154,13 @@ func buildMenuTree(flat []models.MenuItem, parentID *uuid.UUID) []models.MenuIte
 	return result
 }
 
-// FindItemByID retrieves a single menu item by ID. Returns nil if not found.
-func (s *MenuStore) FindItemByID(id uuid.UUID) (*models.MenuItem, error) {
-	row := s.db.QueryRow(`SELECT `+menuItemColumns+` FROM menu_items WHERE id = $1`, id)
+// FindItemByID retrieves a single menu item by ID, scoped to a tenant via its menu.
+// Returns nil if not found.
+func (s *MenuStore) FindItemByID(tenantID, id uuid.UUID) (*models.MenuItem, error) {
+	row := s.db.QueryRow(`
+		SELECT `+menuItemColumns+` FROM menu_items
+		WHERE id = $1 AND menu_id IN (SELECT id FROM menus WHERE tenant_id = $2)
+	`, id, tenantID)
 	mi, err := scanMenuItem(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -183,24 +187,28 @@ func (s *MenuStore) CreateItem(item *models.MenuItem) (*models.MenuItem, error) 
 	return result, nil
 }
 
-// UpdateItem modifies an existing menu item.
-func (s *MenuStore) UpdateItem(item *models.MenuItem) error {
+// UpdateItem modifies an existing menu item, scoped to a tenant via its menu.
+func (s *MenuStore) UpdateItem(tenantID uuid.UUID, item *models.MenuItem) error {
 	_, err := s.db.Exec(`
 		UPDATE menu_items SET
 			label = $1, url = $2, content_id = $3, target = $4,
 			parent_id = $5, sort_order = $6, updated_at = NOW()
 		WHERE id = $7
+		  AND menu_id IN (SELECT id FROM menus WHERE tenant_id = $8)
 	`, item.Label, item.URL, item.ContentID, item.Target,
-		item.ParentID, item.SortOrder, item.ID)
+		item.ParentID, item.SortOrder, item.ID, tenantID)
 	if err != nil {
 		return fmt.Errorf("update menu item: %w", err)
 	}
 	return nil
 }
 
-// DeleteItem removes a menu item by ID.
-func (s *MenuStore) DeleteItem(id uuid.UUID) error {
-	_, err := s.db.Exec(`DELETE FROM menu_items WHERE id = $1`, id)
+// DeleteItem removes a menu item by ID, scoped to a tenant via its menu.
+func (s *MenuStore) DeleteItem(tenantID, id uuid.UUID) error {
+	_, err := s.db.Exec(`
+		DELETE FROM menu_items
+		WHERE id = $1 AND menu_id IN (SELECT id FROM menus WHERE tenant_id = $2)
+	`, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("delete menu item: %w", err)
 	}
@@ -258,13 +266,13 @@ func (s *MenuStore) NextItemSortOrder(menuID uuid.UUID, parentID *uuid.UUID) (in
 	return 0, nil
 }
 
-// FindMenuByID retrieves a menu by ID. Returns nil if not found.
-func (s *MenuStore) FindMenuByID(id uuid.UUID) (*models.Menu, error) {
+// FindMenuByID retrieves a menu by ID within a tenant. Returns nil if not found.
+func (s *MenuStore) FindMenuByID(tenantID, id uuid.UUID) (*models.Menu, error) {
 	var m models.Menu
 	err := s.db.QueryRow(`
 		SELECT id, tenant_id, location, created_at, updated_at
-		FROM menus WHERE id = $1
-	`, id).Scan(&m.ID, &m.TenantID, &m.Location, &m.CreatedAt, &m.UpdatedAt)
+		FROM menus WHERE id = $1 AND tenant_id = $2
+	`, id, tenantID).Scan(&m.ID, &m.TenantID, &m.Location, &m.CreatedAt, &m.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

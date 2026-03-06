@@ -47,7 +47,7 @@ func TestTemplateStoreCreateAndFind(t *testing.T) {
 	}
 
 	// FindByID.
-	found, err := s.FindByID(created.ID)
+	found, err := s.FindByID(testTemplateTenantID, created.ID)
 	if err != nil {
 		t.Fatalf("FindByID: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestTemplateStoreCreateAndFind(t *testing.T) {
 	}
 
 	// Not found.
-	found, _ = s.FindByID(uuid.New())
+	found, _ = s.FindByID(testTemplateTenantID, uuid.New())
 	if found != nil {
 		t.Error("expected nil for random UUID")
 	}
@@ -84,7 +84,7 @@ func TestTemplateStoreUpdate(t *testing.T) {
 		t.Fatalf("Update: %v", err)
 	}
 
-	found, _ := s.FindByID(created.ID)
+	found, _ := s.FindByID(testTemplateTenantID, created.ID)
 	if found.HTMLContent != "<header>new</header>" {
 		t.Errorf("html_content: got %q, want new", found.HTMLContent)
 	}
@@ -134,7 +134,7 @@ func TestTemplateStoreActivate(t *testing.T) {
 	}
 
 	// Verify A is no longer active.
-	aRefresh, _ := s.FindByID(a.ID)
+	aRefresh, _ := s.FindByID(testTemplateTenantID, a.ID)
 	if aRefresh.IsActive {
 		t.Error("A should no longer be active")
 	}
@@ -152,11 +152,11 @@ func TestTemplateStoreDeleteInactive(t *testing.T) {
 	})
 
 	// Delete inactive — should succeed.
-	if err := s.Delete(created.ID); err != nil {
+	if err := s.Delete(testTemplateTenantID, created.ID); err != nil {
 		t.Fatalf("Delete inactive: %v", err)
 	}
 
-	found, _ := s.FindByID(created.ID)
+	found, _ := s.FindByID(testTemplateTenantID, created.ID)
 	if found != nil {
 		t.Error("expected nil after delete")
 	}
@@ -181,7 +181,7 @@ func TestTemplateStoreDeleteActiveBlocked(t *testing.T) {
 	_ = s.Activate(testTemplateTenantID, created.ID)
 
 	// Delete active — should fail.
-	err := s.Delete(created.ID)
+	err := s.Delete(testTemplateTenantID, created.ID)
 	if err == nil {
 		t.Error("expected error when deleting active template")
 	}

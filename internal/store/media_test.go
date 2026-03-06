@@ -54,7 +54,7 @@ func TestMediaStoreCreateAndFind(t *testing.T) {
 	}
 
 	// FindByID.
-	found, err := s.FindByID(created.ID)
+	found, err := s.FindByID(testMediaTenantID, created.ID)
 	if err != nil {
 		t.Fatalf("FindByID: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestMediaStoreCreateAndFind(t *testing.T) {
 	}
 
 	// Not found.
-	found, _ = s.FindByID(uuid.New())
+	found, _ = s.FindByID(testMediaTenantID, uuid.New())
 	if found != nil {
 		t.Error("expected nil for random UUID")
 	}
@@ -132,7 +132,7 @@ func TestMediaStoreDelete(t *testing.T) {
 	var id uuid.UUID
 	_ = db.QueryRow("SELECT id FROM media WHERE s3_key = $1", key).Scan(&id)
 
-	deleted, err := s.Delete(id)
+	deleted, err := s.Delete(testMediaTenantID, id)
 	if err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
@@ -144,13 +144,13 @@ func TestMediaStoreDelete(t *testing.T) {
 	}
 
 	// Verify gone.
-	found, _ := s.FindByID(id)
+	found, _ := s.FindByID(testMediaTenantID, id)
 	if found != nil {
 		t.Error("expected nil after delete")
 	}
 
 	// Delete nonexistent — should return nil.
-	deleted, _ = s.Delete(uuid.New())
+	deleted, _ = s.Delete(testMediaTenantID, uuid.New())
 	if deleted != nil {
 		t.Error("expected nil for nonexistent delete")
 	}

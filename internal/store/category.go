@@ -128,9 +128,9 @@ func flattenTree(cats []models.Category, result *[]models.Category) {
 	}
 }
 
-// FindByID retrieves a category by ID. Returns nil if not found.
-func (s *CategoryStore) FindByID(id uuid.UUID) (*models.Category, error) {
-	row := s.db.QueryRow(`SELECT `+categoryColumns+` FROM categories WHERE id = $1`, id)
+// FindByID retrieves a category by ID within a tenant. Returns nil if not found.
+func (s *CategoryStore) FindByID(tenantID, id uuid.UUID) (*models.Category, error) {
+	row := s.db.QueryRow(`SELECT `+categoryColumns+` FROM categories WHERE id = $1 AND tenant_id = $2`, id, tenantID)
 	c, err := scanCategory(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -171,8 +171,8 @@ func (s *CategoryStore) Update(c *models.Category) error {
 }
 
 // Delete removes a category by ID. Children are re-parented (ON DELETE SET NULL).
-func (s *CategoryStore) Delete(id uuid.UUID) error {
-	_, err := s.db.Exec(`DELETE FROM categories WHERE id = $1`, id)
+func (s *CategoryStore) Delete(tenantID, id uuid.UUID) error {
+	_, err := s.db.Exec(`DELETE FROM categories WHERE id = $1 AND tenant_id = $2`, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("delete category: %w", err)
 	}

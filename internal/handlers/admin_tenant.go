@@ -526,7 +526,7 @@ func (ta *TenantAdmin) TenantDeleteDomain(w http.ResponseWriter, r *http.Request
 	}
 
 	// Look up the domain to get the domain name for K8s cleanup.
-	domain, err := ta.domainStore.FindByID(domainID)
+	domain, err := ta.domainStore.FindByID(tenantID, domainID)
 	if err != nil || domain == nil {
 		http.NotFound(w, r)
 		return
@@ -540,7 +540,7 @@ func (ta *TenantAdmin) TenantDeleteDomain(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	if err := ta.domainStore.Delete(domainID); err != nil {
+	if err := ta.domainStore.Delete(tenantID, domainID); err != nil {
 		slog.Error("failed to delete tenant domain", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -571,7 +571,7 @@ func (ta *TenantAdmin) TenantVerifyDomain(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	domain, err := ta.domainStore.FindByID(domainID)
+	domain, err := ta.domainStore.FindByID(tenantID, domainID)
 	if err != nil || domain == nil || domain.Status != models.DomainStatusPending {
 		http.NotFound(w, r)
 		return
@@ -603,7 +603,7 @@ func (ta *TenantAdmin) TenantSetPrimaryDomain(w http.ResponseWriter, r *http.Req
 	}
 
 	// Verify the domain belongs to this tenant before setting it as primary.
-	domain, err := ta.domainStore.FindByID(domainID)
+	domain, err := ta.domainStore.FindByID(tenantID, domainID)
 	if err != nil || domain == nil || domain.TenantID != tenantID {
 		http.NotFound(w, r)
 		return
@@ -644,7 +644,7 @@ func (ta *TenantAdmin) TenantUnsetPrimaryDomain(w http.ResponseWriter, r *http.R
 	}
 
 	// Verify the domain belongs to this tenant and is actually primary.
-	domain, err := ta.domainStore.FindByID(domainID)
+	domain, err := ta.domainStore.FindByID(tenantID, domainID)
 	if err != nil || domain == nil || domain.TenantID != tenantID || !domain.IsPrimary {
 		http.NotFound(w, r)
 		return

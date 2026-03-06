@@ -85,7 +85,7 @@ func (p *Public) Homepage(w http.ResponseWriter, r *http.Request) {
 	if len(posts) > 0 {
 		siteTitle, slogan := p.loadSiteTitleAndSlogan(tenant.ID, tenant.Name)
 		menus := p.loadMenus(tenant.ID, "")
-		rendered, err := p.engine.RenderPostList(tenant.ID, siteTitle, slogan, posts, p.resolveFeaturedImages(posts), menus)
+		rendered, err := p.engine.RenderPostList(tenant.ID, siteTitle, slogan, posts, p.resolveFeaturedImages(tenant.ID, posts), menus)
 		if err == nil {
 			p.pageCache.Set(ctx, cache.HomepageKey(tenant.ID.String()), rendered)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -100,7 +100,7 @@ func (p *Public) Homepage(w http.ResponseWriter, r *http.Request) {
 	if err == nil && home != nil {
 		siteTitle, slogan := p.loadSiteTitleAndSlogan(tenant.ID, tenant.Name)
 		menus := p.loadMenus(tenant.ID, "home")
-		rendered, err := p.engine.RenderPage(tenant.ID, siteTitle, slogan, home, p.resolveFeaturedImage(home), p.buildSocialMeta(tenant, home.Type, "/"), menus)
+		rendered, err := p.engine.RenderPage(tenant.ID, siteTitle, slogan, home, p.resolveFeaturedImage(tenant.ID, home), p.buildSocialMeta(tenant, home.Type, "/"), menus)
 		if err == nil {
 			p.pageCache.Set(ctx, cache.HomepageKey(tenant.ID.String()), rendered)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -156,7 +156,7 @@ func (p *Public) Page(w http.ResponseWriter, r *http.Request) {
 
 	siteTitle, slogan := p.loadSiteTitleAndSlogan(tenant.ID, tenant.Name)
 	menus := p.loadMenus(tenant.ID, slugParam)
-	rendered, err := p.engine.RenderPage(tenant.ID, siteTitle, slogan, content, p.resolveFeaturedImage(content), p.buildSocialMeta(tenant, content.Type, "/"+content.Slug), menus)
+	rendered, err := p.engine.RenderPage(tenant.ID, siteTitle, slogan, content, p.resolveFeaturedImage(tenant.ID, content), p.buildSocialMeta(tenant, content.Type, "/"+content.Slug), menus)
 	if err != nil {
 		slog.Error("render page failed", "error", err, "slug", slugParam)
 		// Fall back to a safe error page when the template engine fails.
@@ -208,11 +208,11 @@ func (p *Public) buildSocialMeta(tenant *models.Tenant, contentType models.Conte
 
 // resolveFeaturedImage returns the featured image data (URL, srcset, alt)
 // for a content item, or nil if none is set or storage is not configured.
-func (p *Public) resolveFeaturedImage(content *models.Content) *engine.FeaturedImage {
+func (p *Public) resolveFeaturedImage(tenantID uuid.UUID, content *models.Content) *engine.FeaturedImage {
 	if content.FeaturedImageID == nil || p.mediaStore == nil || p.storageClient == nil {
 		return nil
 	}
-	media, err := p.mediaStore.FindByID(*content.FeaturedImageID)
+	media, err := p.mediaStore.FindByID(tenantID, *content.FeaturedImageID)
 	if err != nil || media == nil {
 		return nil
 	}
@@ -237,7 +237,7 @@ func (p *Public) resolveFeaturedImage(content *models.Content) *engine.FeaturedI
 
 // resolveFeaturedImages returns a map of content ID → featured image data
 // for a slice of content items. Uses batch variant lookup for efficiency.
-func (p *Public) resolveFeaturedImages(posts []models.Content) map[string]*engine.FeaturedImage {
+func (p *Public) resolveFeaturedImages(tenantID uuid.UUID, posts []models.Content) map[string]*engine.FeaturedImage {
 	if p.mediaStore == nil || p.storageClient == nil {
 		return nil
 	}
@@ -269,7 +269,7 @@ func (p *Public) resolveFeaturedImages(posts []models.Content) map[string]*engin
 
 	result := make(map[string]*engine.FeaturedImage)
 	for _, ref := range refs {
-		media, err := p.mediaStore.FindByID(ref.mediaID)
+		media, err := p.mediaStore.FindByID(tenantID, ref.mediaID)
 		if err != nil || media == nil {
 			continue
 		}
@@ -334,14 +334,14 @@ func (p *Public) loadMenus(tenantID uuid.UUID, currentSlug string) engine.Menus 
 		if err != nil || menu == nil {
 			continue
 		}
-		menus[loc] = p.convertMenuItems(menu.Items, currentSlug)
+		menus[loc] = p.convertMenuItems(tenantID, menu.Items, currentSlug)
 	}
 	return menus
 }
 
 // convertMenuItems converts model menu items to template-safe items,
 // resolving content slugs and setting Active state.
-func (p *Public) convertMenuItems(items []models.MenuItem, currentSlug string) []engine.TemplateMenuItem {
+func (p *Public) convertMenuItems(tenantID uuid.UUID, items []models.MenuItem, currentSlug string) []engine.TemplateMenuItem {
 	var result []engine.TemplateMenuItem
 	for _, item := range items {
 		ti := engine.TemplateMenuItem{
@@ -352,7 +352,7 @@ func (p *Public) convertMenuItems(items []models.MenuItem, currentSlug string) [
 
 		// Resolve URL from content slug when linked to content.
 		if item.ContentID != nil {
-			content, err := p.contentStore.FindByID(*item.ContentID)
+			content, err := p.contentStore.FindByID(tenantID, *item.ContentID)
 			if err == nil && content != nil {
 				ti.URL = "/" + content.Slug
 			}
@@ -364,7 +364,7 @@ func (p *Public) convertMenuItems(items []models.MenuItem, currentSlug string) [
 		}
 
 		if len(item.Children) > 0 {
-			ti.Children = p.convertMenuItems(item.Children, currentSlug)
+			ti.Children = p.convertMenuItems(tenantID, item.Children, currentSlug)
 		}
 
 		result = append(result, ti)

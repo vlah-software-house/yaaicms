@@ -51,13 +51,13 @@ func (s *TemplateStore) List(tenantID uuid.UUID) ([]models.Template, error) {
 	return templates, rows.Err()
 }
 
-// FindByID retrieves a template by its UUID. Returns nil if not found.
-func (s *TemplateStore) FindByID(id uuid.UUID) (*models.Template, error) {
+// FindByID retrieves a template by its UUID within a tenant. Returns nil if not found.
+func (s *TemplateStore) FindByID(tenantID, id uuid.UUID) (*models.Template, error) {
 	t := &models.Template{}
 	err := s.db.QueryRow(`
 		SELECT id, name, type, html_content, version, is_active, created_at, updated_at
-		FROM templates WHERE id = $1
-	`, id).Scan(
+		FROM templates WHERE id = $1 AND tenant_id = $2
+	`, id, tenantID).Scan(
 		&t.ID, &t.Name, &t.Type, &t.HTMLContent, &t.Version,
 		&t.IsActive, &t.CreatedAt, &t.UpdatedAt,
 	)
@@ -153,8 +153,8 @@ func (s *TemplateStore) Activate(tenantID uuid.UUID, id uuid.UUID) error {
 }
 
 // Delete removes a template by ID. Cannot delete an active template.
-func (s *TemplateStore) Delete(id uuid.UUID) error {
-	result, err := s.db.Exec(`DELETE FROM templates WHERE id = $1 AND is_active = FALSE`, id)
+func (s *TemplateStore) Delete(tenantID, id uuid.UUID) error {
+	result, err := s.db.Exec(`DELETE FROM templates WHERE id = $1 AND tenant_id = $2 AND is_active = FALSE`, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("delete template: %w", err)
 	}
