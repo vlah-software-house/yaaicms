@@ -1517,19 +1517,29 @@ func buildSrcsetForPreview(storageClient *storage.Client, variants []models.Medi
 //  2. Has <head> but no TailwindCSS → injects CDN before </head>
 //  3. Fragment (header/footer) with no document structure → wraps in full HTML document
 func wrapPreviewHTML(rendered []byte) []byte {
-	const tailwindCDN = `<script src="https://cdn.tailwindcss.com"></script>`
+	const cdnScripts = `<script src="https://cdn.tailwindcss.com"></script>` + "\n" +
+		`<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>`
 
 	s := string(rendered)
 
-	if strings.Contains(strings.ToLower(s), "tailwindcss") {
+	// Already has both CDNs — return as-is.
+	if strings.Contains(strings.ToLower(s), "tailwindcss") && strings.Contains(strings.ToLower(s), "alpinejs") {
 		return rendered
 	}
 
 	if i := strings.Index(strings.ToLower(s), "</head>"); i != -1 {
-		return []byte(s[:i] + tailwindCDN + "\n" + s[i:])
+		// Inject whichever CDN is missing before </head>.
+		inject := ""
+		if !strings.Contains(strings.ToLower(s), "tailwindcss") {
+			inject += `<script src="https://cdn.tailwindcss.com"></script>` + "\n"
+		}
+		if !strings.Contains(strings.ToLower(s), "alpinejs") {
+			inject += `<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>` + "\n"
+		}
+		return []byte(s[:i] + inject + s[i:])
 	}
 
-	return []byte(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">` + tailwindCDN + `</head><body>` + s + `</body></html>`)
+	return []byte(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">` + cdnScripts + `</head><body>` + s + `</body></html>`)
 }
 
 // buildTemplateSystemPrompt creates a system prompt that instructs the LLM
@@ -1549,7 +1559,9 @@ CRITICAL RULES:
 5. Templates should be responsive and look professional on all screen sizes.
 6. Use semantic HTML elements (header, nav, main, article, footer, section, etc.).
 7. Include the TailwindCSS CDN script tag only in full page templates (page, article_loop).
-8. Guard optional fields with {{if .Field}} to avoid rendering empty markup.`
+8. Include the AlpineJS CDN script tag in full page templates for interactive components (mobile menus, dropdowns).
+   Add: <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+9. Guard optional fields with {{if .Field}} to avoid rendering empty markup.`
 
 	var vars string
 	switch tmplType {
@@ -1586,7 +1598,13 @@ DESIGN GUIDELINES:
 - Optionally show the slogan near the title if set.
 - Render navigation from {{range .Menus.main}} — do NOT hardcode any nav links.
 - Support dropdown menus for items with {{.Children}} (one level of nesting).
-- Make the header responsive: hamburger menu or collapsible nav on mobile.
+- Make the header responsive with a mobile hamburger menu.
+  AlpineJS is available on all pages. Use it for the mobile menu toggle:
+  Wrap the header in a container with x-data="{ mobileOpen: false }"
+  Add a hamburger button (visible on mobile, hidden on md+) with @click="mobileOpen = !mobileOpen"
+  Add a mobile menu panel with x-show="mobileOpen" @click.away="mobileOpen = false" x-transition
+  The mobile panel should list all menu items vertically (no dropdowns needed on mobile).
+  Desktop nav should use "hidden md:flex" and the mobile toggle "md:hidden".
 - Use a contrasting background (e.g., dark bg with light text, or white with border-bottom).
 - Consider making it sticky with "sticky top-0 z-50" for better UX.`
 
@@ -1632,7 +1650,9 @@ Page templates render individual posts and pages. They are FULL HTML documents
 that include the <html>, <head>, and <body> tags. The header and footer are
 pre-rendered HTML fragments injected via {{.Header}} and {{.Footer}}.
 
-Include the TailwindCSS CDN in <head>: <script src="https://cdn.tailwindcss.com"></script>
+Include in <head>:
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 
 AVAILABLE VARIABLES:
 
@@ -1710,7 +1730,7 @@ Site-level:
   Current year. Available but rarely needed in page templates (footer handles copyright).
 
 DESIGN GUIDELINES:
-- Structure: <html> → <head> (with TailwindCSS CDN, meta tags) → <body> → {{.Header}} → <main> → {{.Footer}}
+- Structure: <html> → <head> (with TailwindCSS + AlpineJS CDNs, meta tags) → <body> → {{.Header}} → <main> → {{.Footer}}
 - Use a hero section with the title, date, and optional featured image.
 - Render {{.Body}} inside a prose container for proper typography.
 - Make the layout responsive: full-width on mobile, max-w-4xl centered on desktop.`
@@ -1722,7 +1742,9 @@ TEMPLATE TYPE: Article Loop (post listing / blog index)
 Article loop templates show a list or grid of blog posts. They are FULL HTML
 documents with <html>, <head>, <body> tags. Posts are iterated with {{range .Posts}}.
 
-Include the TailwindCSS CDN in <head>: <script src="https://cdn.tailwindcss.com"></script>
+Include in <head>:
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 
 AVAILABLE VARIABLES:
 
