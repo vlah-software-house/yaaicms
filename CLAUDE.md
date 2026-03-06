@@ -1,4 +1,3 @@
-uber
 # **AI Assistant Instructions & Project Context**
 
 This file contains the core project specifications, technical stack, and strict workflow rules for any AI coding assistant or tool operating in this repository.  

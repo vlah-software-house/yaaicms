@@ -29,7 +29,7 @@ func (s *TemplateStore) List(tenantID uuid.UUID) ([]models.Template, error) {
 		SELECT id, name, type, html_content, version, is_active, created_at, updated_at
 		FROM templates
 		WHERE tenant_id = $1
-		ORDER BY type, name
+		ORDER BY name, type
 	`, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("list templates: %w", err)

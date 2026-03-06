@@ -806,7 +806,17 @@ func (a *Admin) deleteContent(w http.ResponseWriter, r *http.Request, section st
 
 // --- Template management ---
 
+// templateGroup holds templates sharing the same name prefix (theme).
+// Templates named "Theme — Header" share prefix "Theme".
+// Templates without " — " go into a group with their full name as prefix.
+type templateGroup struct {
+	Prefix    string
+	Templates []models.Template
+}
+
 // TemplatesList renders the templates management page with real data.
+// Templates are grouped by name prefix (text before " — ") so that
+// theme sets from Restyle All appear together with bulk activation.
 func (a *Admin) TemplatesList(w http.ResponseWriter, r *http.Request) {
 	sess := middleware.SessionFromCtx(r.Context())
 	templates, err := a.templateStore.List(sess.TenantID)
@@ -814,10 +824,26 @@ func (a *Admin) TemplatesList(w http.ResponseWriter, r *http.Request) {
 		slog.Error("list templates failed", "error", err)
 	}
 
+	// Group templates by prefix.
+	var groups []templateGroup
+	groupIndex := make(map[string]int)
+	for _, t := range templates {
+		prefix := t.Name
+		if idx := strings.Index(t.Name, " \u2014 "); idx > 0 {
+			prefix = t.Name[:idx]
+		}
+		if i, ok := groupIndex[prefix]; ok {
+			groups[i].Templates = append(groups[i].Templates, t)
+		} else {
+			groupIndex[prefix] = len(groups)
+			groups = append(groups, templateGroup{Prefix: prefix, Templates: []models.Template{t}})
+		}
+	}
+
 	a.renderer.Page(w, r, "templates_list", &render.PageData{
 		Title:   "AI Design",
 		Section: "templates",
-		Data:    map[string]any{"Templates": templates},
+		Data:    map[string]any{"Groups": groups},
 	})
 }
 
