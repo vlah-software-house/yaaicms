@@ -194,7 +194,7 @@
                             </div>
                         </template>
                         <template x-if="previewHTML">
-                            <iframe :srcdoc="previewHTML" class="w-full h-[500px] border-0"></iframe>
+                            <iframe :srcdoc="previewHTML" sandbox="allow-scripts" class="w-full h-[500px] border-0"></iframe>
                         </template>
                     </div>
                 </div>
@@ -503,7 +503,7 @@
                         <template x-if="restylePreviewTab === 'page'">
                             <div>
                                 <template x-if="restylePagePreview">
-                                    <iframe :srcdoc="restylePagePreview" class="w-full h-[600px] border-0"></iframe>
+                                    <iframe :srcdoc="restylePagePreview" sandbox="allow-scripts" class="w-full h-[600px] border-0"></iframe>
                                 </template>
                                 <template x-if="!restylePagePreview">
                                     <div class="flex items-center justify-center h-[400px] text-sm text-gray-400">
@@ -515,7 +515,7 @@
                         <template x-if="restylePreviewTab === 'blog'">
                             <div>
                                 <template x-if="restyleBlogPreview">
-                                    <iframe :srcdoc="restyleBlogPreview" class="w-full h-[600px] border-0"></iframe>
+                                    <iframe :srcdoc="restyleBlogPreview" sandbox="allow-scripts" class="w-full h-[600px] border-0"></iframe>
                                 </template>
                                 <template x-if="!restyleBlogPreview">
                                     <div class="flex items-center justify-center h-[400px] text-sm text-gray-400">

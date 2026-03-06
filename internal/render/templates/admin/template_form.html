@@ -201,8 +201,13 @@
                     </button>
                 </div>
             </div>
-            <div id="preview-frame" class="border border-gray-200 rounded-md bg-white min-h-[200px] p-4">
-                <p class="text-sm text-gray-400 text-center">Click "Refresh Preview" to see your template rendered with sample data.</p>
+            <div id="preview-frame" class="border border-gray-200 rounded-md bg-white min-h-[200px]">
+                <template x-if="!previewHTML">
+                    <p class="text-sm text-gray-400 text-center p-4">Click "Refresh Preview" to see your template rendered with sample data.</p>
+                </template>
+                <template x-if="previewHTML">
+                    <iframe :srcdoc="previewHTML" sandbox="allow-scripts" class="w-full h-[500px] border-0 rounded-md"></iframe>
+                </template>
             </div>
         </div>
 
@@ -316,9 +321,17 @@ function templateEditor() {
         aiLoading: false,
         previewContentID: '',
         previewContent: [],
+        previewHTML: '',
 
         init() {
             this.loadPreviewContent();
+        },
+
+        csrfToken() {
+            const el = document.querySelector('[hx-headers]');
+            if (!el) return '';
+            try { return JSON.parse(el.getAttribute('hx-headers'))['X-CSRF-Token']; }
+            catch (e) { console.warn('Failed to parse CSRF token:', e); return ''; }
         },
 
         async loadPreviewContent() {
@@ -331,15 +344,26 @@ function templateEditor() {
             }
         },
 
-        refreshFormPreview() {
-            const values = { html_content: this.$refs.editor.value, template_type: this.templateType };
-            if (this.previewContentID) {
-                values.content_id = this.previewContentID;
+        async refreshFormPreview() {
+            const html = this.$refs.editor.value;
+            if (!html.trim()) return;
+            try {
+                const csrf = this.csrfToken();
+                const formData = new FormData();
+                formData.append('html_content', html);
+                formData.append('template_type', this.templateType);
+                if (this.previewContentID) {
+                    formData.append('content_id', this.previewContentID);
+                }
+                const resp = await fetch('/admin/templates/preview', {
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': csrf },
+                    body: formData
+                });
+                this.previewHTML = await resp.text();
+            } catch (err) {
+                console.error('Preview failed:', err);
             }
-            htmx.ajax('POST', '/admin/templates/preview', {
-                target: '#preview-frame',
-                values: values
-            });
         },
 
         async aiImprove() {
@@ -363,8 +387,7 @@ function templateEditor() {
             });
 
             try {
-                const csrfToken = document.querySelector('[hx-headers]')?.getAttribute('hx-headers');
-                const csrf = csrfToken ? JSON.parse(csrfToken)['X-CSRF-Token'] : '';
+                const csrf = this.csrfToken();
 
                 const formData = new FormData();
                 formData.append('prompt', text);
