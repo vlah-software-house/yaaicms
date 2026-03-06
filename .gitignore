@@ -59,6 +59,14 @@ e2e/.auth/
 # K8s secrets (generated from .secrets, never committed)
 deploy/overlays/*/secret.yaml
 
+# MCP tool artifacts
+.playwright-mcp/
+.serena/
+
+# Development screenshots (ad-hoc captures)
+*.png
+help-screenshots/
+
 # Temporary files
 *.tmp
 *.log
