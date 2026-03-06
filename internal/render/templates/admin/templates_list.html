@@ -39,8 +39,8 @@
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div class="flex items-center justify-between px-6 py-3 bg-gray-50 border-b border-gray-200">
             <h3 class="text-sm font-semibold text-gray-900">{{.Prefix}}</h3>
-            <div class="flex items-center gap-2" x-data="{ activating: false, done: false }">
-                <template x-if="!done">
+            <div class="flex items-center gap-2" x-data="{ activating: false, activateDone: false, deleting: false, deleteDone: false }">
+                <template x-if="!activateDone">
                     <button type="button" @click="async () => {
                         activating = true;
                         const ids = [{{range .Templates}}{{if not .IsActive}}'{{.ID}}',{{end}}{{end}}];
@@ -53,7 +53,7 @@
                                 redirect: 'manual'
                             });
                         }
-                        done = true;
+                        activateDone = true;
                         setTimeout(() => htmx.ajax('GET', '/admin/templates', { target: '#main-content' }), 300);
                     }" :disabled="activating"
                     class="rounded bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 border border-green-200
@@ -61,8 +61,33 @@
                         <span x-text="activating ? 'Activating...' : 'Activate All'"></span>
                     </button>
                 </template>
-                <template x-if="done">
+                <template x-if="activateDone">
                     <span class="text-xs text-green-600 font-medium">Activated!</span>
+                </template>
+                <template x-if="!deleteDone">
+                    <button type="button" @click="async () => {
+                        if (!confirm('Delete all inactive templates in this group?')) return;
+                        deleting = true;
+                        const ids = [{{range .Templates}}{{if not .IsActive}}'{{.ID}}',{{end}}{{end}}];
+                        const csrf = document.querySelector('meta[name=csrf-token]')?.content
+                                  || document.querySelector('[name=csrf_token]')?.value || '';
+                        for (const id of ids) {
+                            await fetch('/admin/templates/' + id, {
+                                method: 'DELETE',
+                                headers: { 'X-CSRF-Token': csrf },
+                                redirect: 'manual'
+                            });
+                        }
+                        deleteDone = true;
+                        setTimeout(() => htmx.ajax('GET', '/admin/templates', { target: '#main-content' }), 300);
+                    }" :disabled="deleting"
+                    class="rounded bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 border border-red-200
+                           hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-text="deleting ? 'Deleting...' : 'Delete All'"></span>
+                    </button>
+                </template>
+                <template x-if="deleteDone">
+                    <span class="text-xs text-red-600 font-medium">Deleted!</span>
                 </template>
             </div>
         </div>
