@@ -553,9 +553,27 @@
                     </button>
 
                     <template x-if="restyleSaveSuccess">
-                        <p class="text-xs text-green-700 bg-green-50 rounded p-2">
-                            All 4 templates saved! Go to the templates list to activate them.
-                        </p>
+                        <div class="space-y-3">
+                            <template x-if="!restyleActivateSuccess">
+                                <div class="flex items-center gap-3 bg-green-50 rounded p-2">
+                                    <p class="text-xs text-green-700 flex-1">All 4 templates saved!</p>
+                                    <button type="button" @click="activateAllTemplates()"
+                                            :disabled="restyleActivating"
+                                            class="flex-shrink-0 rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white
+                                                   hover:bg-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <span x-text="restyleActivating ? 'Activating...' : 'Activate All'"></span>
+                                    </button>
+                                </div>
+                            </template>
+                            <template x-if="restyleActivateSuccess">
+                                <p class="text-xs text-green-700 bg-green-50 rounded p-2">
+                                    All 4 templates saved and activated!
+                                </p>
+                            </template>
+                            <template x-if="restyleActivateError">
+                                <p class="text-xs text-red-700 bg-red-50 rounded p-2" x-text="restyleActivateError"></p>
+                            </template>
+                        </div>
                     </template>
                     <template x-if="restyleSaveError">
                         <p class="text-xs text-red-700 bg-red-50 rounded p-2" x-text="restyleSaveError"></p>
@@ -629,6 +647,10 @@ function aiTemplateBuilder() {
         restyleSaving: false,
         restyleSaveSuccess: false,
         restyleSaveError: '',
+        restyleSavedIDs: [],
+        restyleActivating: false,
+        restyleActivateSuccess: false,
+        restyleActivateError: '',
 
         init() {
             this.loadPreviewContent();
@@ -961,6 +983,9 @@ function aiTemplateBuilder() {
             this.restyleBlogPreview = '';
             this.restyleSaveSuccess = false;
             this.restyleSaveError = '';
+            this.restyleSavedIDs = [];
+            this.restyleActivateSuccess = false;
+            this.restyleActivateError = '';
             this.restyleViewTab = 'header';
 
             const csrf = this.csrfToken();
@@ -1143,6 +1168,9 @@ function aiTemplateBuilder() {
             this.restyleSaving = true;
             this.restyleSaveSuccess = false;
             this.restyleSaveError = '';
+            this.restyleSavedIDs = [];
+            this.restyleActivateSuccess = false;
+            this.restyleActivateError = '';
 
             const csrf = this.csrfToken();
             const prefix = this.restyleSavePrefix.trim();
@@ -1166,12 +1194,43 @@ function aiTemplateBuilder() {
                         this.restyleSaveError = `Failed to save ${typeLabels[tmplType]}: ${data.error}`;
                         return;
                     }
+                    if (data.id) {
+                        this.restyleSavedIDs.push(data.id);
+                    }
                 }
                 this.restyleSaveSuccess = true;
             } catch (err) {
                 this.restyleSaveError = 'Network error: ' + err.message;
             } finally {
                 this.restyleSaving = false;
+            }
+        },
+
+        async activateAllTemplates() {
+            if (this.restyleSavedIDs.length === 0 || this.restyleActivating) return;
+            this.restyleActivating = true;
+            this.restyleActivateError = '';
+
+            const csrf = this.csrfToken();
+
+            try {
+                for (const id of this.restyleSavedIDs) {
+                    const resp = await fetch(`/admin/templates/${id}/activate`, {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': csrf },
+                        redirect: 'manual'
+                    });
+                    // The endpoint returns 303 redirect on success.
+                    if (resp.status !== 0 && resp.status !== 303 && resp.type !== 'opaqueredirect' && !resp.ok) {
+                        this.restyleActivateError = 'Failed to activate template ' + id;
+                        return;
+                    }
+                }
+                this.restyleActivateSuccess = true;
+            } catch (err) {
+                this.restyleActivateError = 'Network error: ' + err.message;
+            } finally {
+                this.restyleActivating = false;
             }
         }
     };
