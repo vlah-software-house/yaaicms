@@ -282,6 +282,8 @@ func (a *Admin) MediaUpload(w http.ResponseWriter, r *http.Request) {
 
 // MediaDelete removes a media item from both S3 and the database.
 func (a *Admin) MediaDelete(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -299,7 +301,7 @@ func (a *Admin) MediaDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete from DB first (returns the row for S3 cleanup).
-	deleted, err := a.mediaStore.Delete(id)
+	deleted, err := a.mediaStore.Delete(sess.TenantID, id)
 	if err != nil {
 		slog.Error("media db delete failed", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -333,6 +335,8 @@ func (a *Admin) MediaDelete(w http.ResponseWriter, r *http.Request) {
 // MediaServe provides the URL for a media item. Public files redirect to
 // the direct S3 URL; private files get a time-limited presigned URL.
 func (a *Admin) MediaServe(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -340,7 +344,7 @@ func (a *Admin) MediaServe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	media, err := a.mediaStore.FindByID(id)
+	media, err := a.mediaStore.FindByID(sess.TenantID, id)
 	if err != nil {
 		slog.Error("media lookup failed", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -424,6 +428,8 @@ func (a *Admin) MediaRegenerateVariants(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	sess := middleware.SessionFromCtx(r.Context())
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -431,7 +437,7 @@ func (a *Admin) MediaRegenerateVariants(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	media, err := a.mediaStore.FindByID(id)
+	media, err := a.mediaStore.FindByID(sess.TenantID, id)
 	if err != nil || media == nil {
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
@@ -498,6 +504,8 @@ func (a *Admin) MediaRegenerateBulk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sess := middleware.SessionFromCtx(r.Context())
+
 	// Find images without any variants (cap at 50 per request to avoid timeout).
 	ids, err := a.variantStore.ListMediaWithoutVariants(50)
 	if err != nil {
@@ -520,7 +528,7 @@ func (a *Admin) MediaRegenerateBulk(w http.ResponseWriter, r *http.Request) {
 	var processed, failed int
 
 	for _, id := range ids {
-		media, err := a.mediaStore.FindByID(id)
+		media, err := a.mediaStore.FindByID(sess.TenantID, id)
 		if err != nil || media == nil {
 			failed++
 			continue

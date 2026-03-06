@@ -1352,9 +1352,9 @@ func TestRenderPageCachesTemplates(t *testing.T) {
 	}
 
 	// Re-fetch templates to get current versions after activation bumped them.
-	hdr, _ = ts.FindByID(hdr.ID)
-	ftr, _ = ts.FindByID(ftr.ID)
-	pg, _ = ts.FindByID(pg.ID)
+	hdr, _ = ts.FindByID(testTenantID, hdr.ID)
+	ftr, _ = ts.FindByID(testTenantID, ftr.ID)
+	pg, _ = ts.FindByID(testTenantID, pg.ID)
 
 	// Verify all three templates are now cached.
 	if eng.cache.get(hdr.ID.String(), hdr.Version) == nil {

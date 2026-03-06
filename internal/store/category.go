@@ -128,9 +128,9 @@ func flattenTree(cats []models.Category, result *[]models.Category) {
 	}
 }
 
-// FindByID retrieves a category by ID. Returns nil if not found.
-func (s *CategoryStore) FindByID(id uuid.UUID) (*models.Category, error) {
-	row := s.db.QueryRow(`SELECT `+categoryColumns+` FROM categories WHERE id = $1`, id)
+// FindByID retrieves a category by ID within a tenant. Returns nil if not found.
+func (s *CategoryStore) FindByID(tenantID, id uuid.UUID) (*models.Category, error) {
+	row := s.db.QueryRow(`SELECT `+categoryColumns+` FROM categories WHERE id = $1 AND tenant_id = $2`, id, tenantID)
 	c, err := scanCategory(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

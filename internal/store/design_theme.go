@@ -61,9 +61,9 @@ func (s *DesignThemeStore) List(tenantID uuid.UUID) ([]models.DesignTheme, error
 	return items, rows.Err()
 }
 
-// FindByID retrieves a design theme by its UUID. Returns nil if not found.
-func (s *DesignThemeStore) FindByID(id uuid.UUID) (*models.DesignTheme, error) {
-	row := s.db.QueryRow(`SELECT `+themeColumns+` FROM design_themes WHERE id = $1`, id)
+// FindByID retrieves a design theme by its UUID within a tenant. Returns nil if not found.
+func (s *DesignThemeStore) FindByID(tenantID, id uuid.UUID) (*models.DesignTheme, error) {
+	row := s.db.QueryRow(`SELECT `+themeColumns+` FROM design_themes WHERE id = $1 AND tenant_id = $2`, id, tenantID)
 	t, err := scanTheme(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

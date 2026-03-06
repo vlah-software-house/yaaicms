@@ -60,9 +60,9 @@ func (s *MediaStore) Create(tenantID uuid.UUID, m *models.Media) (*models.Media,
 	return m, nil
 }
 
-// FindByID retrieves a single media record by its UUID.
-func (s *MediaStore) FindByID(id uuid.UUID) (*models.Media, error) {
-	row := s.db.QueryRow(`SELECT `+mediaColumns+` FROM media WHERE id = $1`, id)
+// FindByID retrieves a single media record by its UUID within a tenant.
+func (s *MediaStore) FindByID(tenantID, id uuid.UUID) (*models.Media, error) {
+	row := s.db.QueryRow(`SELECT `+mediaColumns+` FROM media WHERE id = $1 AND tenant_id = $2`, id, tenantID)
 	m, err := scanMedia(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -98,12 +98,12 @@ func (s *MediaStore) List(tenantID uuid.UUID, limit, offset int) ([]models.Media
 	return items, rows.Err()
 }
 
-// Delete removes a media record and returns it so the caller can clean
-// up the corresponding S3 objects.
-func (s *MediaStore) Delete(id uuid.UUID) (*models.Media, error) {
+// Delete removes a media record within a tenant and returns it so the caller
+// can clean up the corresponding S3 objects.
+func (s *MediaStore) Delete(tenantID, id uuid.UUID) (*models.Media, error) {
 	row := s.db.QueryRow(`
-		DELETE FROM media WHERE id = $1
-		RETURNING `+mediaColumns, id)
+		DELETE FROM media WHERE id = $1 AND tenant_id = $2
+		RETURNING `+mediaColumns, id, tenantID)
 	m, err := scanMedia(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

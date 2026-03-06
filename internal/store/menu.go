@@ -154,9 +154,13 @@ func buildMenuTree(flat []models.MenuItem, parentID *uuid.UUID) []models.MenuIte
 	return result
 }
 
-// FindItemByID retrieves a single menu item by ID. Returns nil if not found.
-func (s *MenuStore) FindItemByID(id uuid.UUID) (*models.MenuItem, error) {
-	row := s.db.QueryRow(`SELECT `+menuItemColumns+` FROM menu_items WHERE id = $1`, id)
+// FindItemByID retrieves a single menu item by ID, scoped to a tenant via its menu.
+// Returns nil if not found.
+func (s *MenuStore) FindItemByID(tenantID, id uuid.UUID) (*models.MenuItem, error) {
+	row := s.db.QueryRow(`
+		SELECT `+menuItemColumns+` FROM menu_items
+		WHERE id = $1 AND menu_id IN (SELECT id FROM menus WHERE tenant_id = $2)
+	`, id, tenantID)
 	mi, err := scanMenuItem(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -258,13 +262,13 @@ func (s *MenuStore) NextItemSortOrder(menuID uuid.UUID, parentID *uuid.UUID) (in
 	return 0, nil
 }
 
-// FindMenuByID retrieves a menu by ID. Returns nil if not found.
-func (s *MenuStore) FindMenuByID(id uuid.UUID) (*models.Menu, error) {
+// FindMenuByID retrieves a menu by ID within a tenant. Returns nil if not found.
+func (s *MenuStore) FindMenuByID(tenantID, id uuid.UUID) (*models.Menu, error) {
 	var m models.Menu
 	err := s.db.QueryRow(`
 		SELECT id, tenant_id, location, created_at, updated_at
-		FROM menus WHERE id = $1
-	`, id).Scan(&m.ID, &m.TenantID, &m.Location, &m.CreatedAt, &m.UpdatedAt)
+		FROM menus WHERE id = $1 AND tenant_id = $2
+	`, id, tenantID).Scan(&m.ID, &m.TenantID, &m.Location, &m.CreatedAt, &m.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

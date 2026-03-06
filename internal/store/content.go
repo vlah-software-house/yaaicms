@@ -69,9 +69,9 @@ func (s *ContentStore) ListByType(tenantID uuid.UUID, contentType models.Content
 	return items, rows.Err()
 }
 
-// FindByID retrieves a content item by its UUID. Returns nil if not found.
-func (s *ContentStore) FindByID(id uuid.UUID) (*models.Content, error) {
-	row := s.db.QueryRow(`SELECT `+contentColumns+` FROM content WHERE id = $1`, id)
+// FindByID retrieves a content item by its UUID within a tenant. Returns nil if not found.
+func (s *ContentStore) FindByID(tenantID, id uuid.UUID) (*models.Content, error) {
+	row := s.db.QueryRow(`SELECT `+contentColumns+` FROM content WHERE id = $1 AND tenant_id = $2`, id, tenantID)
 	c, err := scanContent(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
