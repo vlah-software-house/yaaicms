@@ -812,6 +812,7 @@ func (a *Admin) deleteContent(w http.ResponseWriter, r *http.Request, section st
 type templateGroup struct {
 	Prefix    string
 	Templates []models.Template
+	AllActive bool // true when every template in the group is active
 }
 
 // TemplatesList renders the templates management page with real data.
@@ -838,6 +839,18 @@ func (a *Admin) TemplatesList(w http.ResponseWriter, r *http.Request) {
 			groupIndex[prefix] = len(groups)
 			groups = append(groups, templateGroup{Prefix: prefix, Templates: []models.Template{t}})
 		}
+	}
+
+	// Mark groups where every template is already active.
+	for i := range groups {
+		allActive := true
+		for _, t := range groups[i].Templates {
+			if !t.IsActive {
+				allActive = false
+				break
+			}
+		}
+		groups[i].AllActive = allActive
 	}
 
 	a.renderer.Page(w, r, "templates_list", &render.PageData{

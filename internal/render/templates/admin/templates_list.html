@@ -39,6 +39,7 @@
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div class="flex items-center justify-between px-6 py-3 bg-gray-50 border-b border-gray-200">
             <h3 class="text-sm font-semibold text-gray-900">{{.Prefix}}</h3>
+            {{if not .AllActive}}
             <div class="flex items-center gap-2" x-data="{ activating: false, activateDone: false, deleting: false, deleteDone: false }">
                 <template x-if="!activateDone">
                     <button type="button" @click="async () => {
@@ -90,6 +91,7 @@
                     <span class="text-xs text-red-600 font-medium">Deleted!</span>
                 </template>
             </div>
+            {{end}}
         </div>
         <table class="min-w-full divide-y divide-gray-200">
             <thead>
