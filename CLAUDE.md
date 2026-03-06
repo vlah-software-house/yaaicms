@@ -30,8 +30,15 @@ Follow this exact sequence for every new task, feature, fix, or patch:
 
 ### **Phase C: Completion & PR**
 
-1. **Final Review:** Wait for the user to confirm the overall task is complete.  
+1. **Final Review:** Wait for the user to confirm the overall task is complete.
 2. **Push & PR:** Once confirmed, push the branch to the remote repository and create a Pull Request (or Merge Request).
+
+### **Phase D: Mandatory PR Review Before Merge**
+
+1. **Never merge directly.** Every change MUST go through a Pull Request — no exceptions.
+2. **Wait for automated reviews:** After creating the PR, wait for **Qodana** (code quality) and **Gemini Code Assist** (security/review) to post their results.
+3. **Fix issues first:** If Qodana or Gemini flag problems, fix them on the branch and push before merging.
+4. **Merge only when clean:** Only merge after all automated checks pass and flagged issues are resolved or acknowledged by the user.
 
 ## **3\. Go Coding Standards**
 
