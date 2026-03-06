@@ -118,6 +118,58 @@ func TestRegistryGenerateNoProvider(t *testing.T) {
 	})
 }
 
+// ---------- Registry.GenerateForTaskAs ----------
+
+func TestRegistryGenerateForTaskAs(t *testing.T) {
+	t.Run("uses named provider regardless of active", func(t *testing.T) {
+		mockA := &mockProvider{name: "a", response: "from a"}
+		mockB := &mockProvider{name: "b", response: "from b"}
+
+		reg := &Registry{
+			providers: map[string]Provider{"a": mockA, "b": mockB},
+			configs: map[string]ProviderConfig{
+				"a": {Model: "model-a"},
+				"b": {Model: "model-b"},
+			},
+			active: "a", // active is "a", but we request "b"
+		}
+
+		result, err := reg.GenerateForTaskAs(context.Background(), "b", TaskContent, "sys", "usr")
+		if err != nil {
+			t.Fatalf("GenerateForTaskAs: unexpected error: %v", err)
+		}
+		if result != "from b" {
+			t.Errorf("result: got %q, want %q", result, "from b")
+		}
+
+		// Provider "a" should NOT have been called.
+		mockA.mu.Lock()
+		if mockA.callCount != 0 {
+			t.Errorf("provider a callCount: got %d, want 0", mockA.callCount)
+		}
+		mockA.mu.Unlock()
+
+		mockB.mu.Lock()
+		if mockB.callCount != 1 {
+			t.Errorf("provider b callCount: got %d, want 1", mockB.callCount)
+		}
+		mockB.mu.Unlock()
+	})
+
+	t.Run("returns error for unknown provider", func(t *testing.T) {
+		reg := &Registry{
+			providers: map[string]Provider{},
+			configs:   map[string]ProviderConfig{},
+			active:    "a",
+		}
+
+		_, err := reg.GenerateForTaskAs(context.Background(), "nonexistent", TaskLight, "sys", "usr")
+		if err == nil {
+			t.Fatal("expected error for unknown provider, got nil")
+		}
+	})
+}
+
 // ---------- Registry.SetActive ----------
 
 func TestRegistrySetActive(t *testing.T) {

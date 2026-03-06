@@ -556,7 +556,7 @@ func (a *Admin) updateContent(w http.ResponseWriter, r *http.Request, section st
 
 	// Generate AI revision title + changelog in the background.
 	if created != nil {
-		go a.generateRevisionMeta(created.ID, rev, item, revisionMessage)
+		go a.generateRevisionMeta(created.ID, rev, item, revisionMessage, a.tenantAIProvider(r))
 	}
 
 	a.invalidateContentCache(r.Context(), sess.TenantID, item.ID, item.Slug, "update")
@@ -566,7 +566,7 @@ func (a *Admin) updateContent(w http.ResponseWriter, r *http.Request, section st
 // generateRevisionMeta uses AI to create a short title and changelog for a
 // revision, comparing the old state (rev) with the new state (updated item).
 // Runs in a background goroutine — errors are logged but don't affect the user.
-func (a *Admin) generateRevisionMeta(revID uuid.UUID, old *models.ContentRevision, updated *models.Content, userMessage string) {
+func (a *Admin) generateRevisionMeta(revID uuid.UUID, old *models.ContentRevision, updated *models.Content, userMessage, providerName string) {
 	// Build a concise diff summary for the AI.
 	var changes []string
 	if old.Title != updated.Title {
@@ -613,7 +613,7 @@ func (a *Admin) generateRevisionMeta(revID uuid.UUID, old *models.ContentRevisio
 (max 60 characters) that summarizes the changes made, like a git commit message.
 Output ONLY the title text, nothing else. Use imperative mood (e.g. "Update title and body content").`
 
-		result, err := a.aiRegistry.GenerateForTask(ctx, ai.TaskLight, systemPrompt, prompt)
+		result, err := a.aiRegistry.GenerateForTaskAs(ctx, providerName, ai.TaskLight, systemPrompt, prompt)
 		if err != nil {
 			slog.Warn("ai revision title failed", "error", err)
 			revTitle = "Content updated"
@@ -633,7 +633,7 @@ Output ONLY the title text, nothing else. Use imperative mood (e.g. "Update titl
 describing what changed in this content revision. Each bullet should start with "- ".
 Be concise and factual. Output ONLY the bullet points, nothing else.`
 
-	changelog, err := a.aiRegistry.GenerateForTask(ctx, ai.TaskLight, changelogSystem, changelogPrompt)
+	changelog, err := a.aiRegistry.GenerateForTaskAs(ctx, providerName, ai.TaskLight, changelogSystem, changelogPrompt)
 	if err != nil {
 		slog.Warn("ai revision changelog failed", "error", err)
 		changelog = diffSummary
@@ -1018,7 +1018,7 @@ func (a *Admin) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 			slog.Error("failed to create template revision", "error", revErr)
 		} else {
 			// Generate AI revision metadata in background.
-			go a.generateTemplateRevisionMeta(created.ID, oldName, oldHTML, newName, htmlContent, revisionMessage)
+			go a.generateTemplateRevisionMeta(created.ID, oldName, oldHTML, newName, htmlContent, revisionMessage, a.tenantAIProvider(r))
 		}
 	}
 
@@ -1209,7 +1209,7 @@ func (a *Admin) TemplateRevisionUpdateTitle(w http.ResponseWriter, r *http.Reque
 
 // generateTemplateRevisionMeta generates AI-powered revision title and changelog
 // for a template revision, running in the background.
-func (a *Admin) generateTemplateRevisionMeta(revID uuid.UUID, oldName, oldHTML, newName, newHTML, userMessage string) {
+func (a *Admin) generateTemplateRevisionMeta(revID uuid.UUID, oldName, oldHTML, newName, newHTML, userMessage, providerName string) {
 	// Build a concise diff summary.
 	var changes []string
 	if oldName != newName {
@@ -1237,7 +1237,7 @@ func (a *Admin) generateTemplateRevisionMeta(revID uuid.UUID, oldName, oldHTML, 
 (max 60 characters) that summarizes the template changes, like a git commit message.
 Output ONLY the title text, nothing else. Use imperative mood (e.g. "Restyle header with dark nav bar").`
 
-		result, err := a.aiRegistry.GenerateForTask(ctx, ai.TaskLight, systemPrompt, prompt)
+		result, err := a.aiRegistry.GenerateForTaskAs(ctx, providerName, ai.TaskLight, systemPrompt, prompt)
 		if err != nil {
 			slog.Warn("ai template revision title failed", "error", err)
 			revTitle = "Template updated"
@@ -1256,7 +1256,7 @@ Output ONLY the title text, nothing else. Use imperative mood (e.g. "Restyle hea
 describing what changed in this template revision. Each bullet should start with "- ".
 Be concise and factual. Output ONLY the bullet points, nothing else.`
 
-	changelog, err := a.aiRegistry.GenerateForTask(ctx, ai.TaskLight, changelogSystem, changelogPrompt)
+	changelog, err := a.aiRegistry.GenerateForTaskAs(ctx, providerName, ai.TaskLight, changelogSystem, changelogPrompt)
 	if err != nil {
 		slog.Warn("ai template revision changelog failed", "error", err)
 		changelog = diffSummary
@@ -1442,7 +1442,7 @@ func (a *Admin) SettingsPage(w http.ResponseWriter, r *http.Request) {
 		Title:   "Settings",
 		Section: "settings",
 		Data: map[string]any{
-			"Providers": a.aiConfig.Providers,
+			"Providers": a.providerInfoForTenant(r),
 			"Settings":  settings,
 		},
 	})

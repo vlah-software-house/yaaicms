@@ -161,6 +161,23 @@ func (r *Registry) GenerateForTask(ctx context.Context, task TaskType, systemPro
 	return p.GenerateWithModel(ctx, model, systemPrompt, userPrompt)
 }
 
+// GenerateForTaskAs is like GenerateForTask but uses a specific named provider
+// instead of the globally active one. This enables per-tenant provider selection
+// without mutating global state.
+func (r *Registry) GenerateForTaskAs(ctx context.Context, providerName string, task TaskType, systemPrompt, userPrompt string) (string, error) {
+	r.mu.RLock()
+	p, ok := r.providers[providerName]
+	cfg := r.configs[providerName]
+	r.mu.RUnlock()
+
+	if !ok {
+		return "", fmt.Errorf("ai: no provider configured for %q", providerName)
+	}
+
+	model := cfg.ModelForTask(task)
+	return p.GenerateWithModel(ctx, model, systemPrompt, userPrompt)
+}
+
 // Active returns the currently active provider.
 func (r *Registry) Active() (Provider, error) {
 	r.mu.RLock()

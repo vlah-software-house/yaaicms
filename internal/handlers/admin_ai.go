@@ -28,6 +28,21 @@ import (
 	"yaaicms/internal/storage"
 )
 
+// tenantAIProvider resolves the AI provider for the current tenant.
+// It reads the "ai_provider" site setting; if not set or the stored provider
+// is no longer available, falls back to the env-var default (Registry.ActiveName).
+func (a *Admin) tenantAIProvider(r *http.Request) string {
+	sess := middleware.SessionFromCtx(r.Context())
+	provider, err := a.siteSettingStore.Get(sess.TenantID, "ai_provider", "")
+	if err != nil || provider == "" {
+		return a.aiRegistry.ActiveName()
+	}
+	if !a.aiRegistry.HasProvider(provider) {
+		return a.aiRegistry.ActiveName()
+	}
+	return provider
+}
+
 // --- AI Assistant Endpoints ---
 //
 // These handlers power the content editor's AI assistant panel.
@@ -65,7 +80,7 @@ Rules:
 - Write 3-6 well-structured paragraphs with subheadings where appropriate.
 - Make the content informative, engaging, and ready to publish.`, contentType)
 
-	result, err := a.aiRegistry.GenerateForTask(r.Context(), ai.TaskContent, systemPrompt, prompt)
+	result, err := a.aiRegistry.GenerateForTaskAs(r.Context(), a.tenantAIProvider(r), ai.TaskContent, systemPrompt, prompt)
 	if err != nil {
 		slog.Error("ai generate content failed", "error", err)
 		writeAIError(w, "AI request failed. Check your provider configuration.")
@@ -265,7 +280,7 @@ func (a *Admin) AISuggestTitle(w http.ResponseWriter, r *http.Request) {
 SEO-friendly title suggestions for the given content. Each title should be on its own line,
 numbered 1-5. Keep titles under 70 characters. Do not include any other text or explanation.`
 
-	result, err := a.aiRegistry.GenerateForTask(r.Context(), ai.TaskLight, systemPrompt, prompt)
+	result, err := a.aiRegistry.GenerateForTaskAs(r.Context(), a.tenantAIProvider(r), ai.TaskLight, systemPrompt, prompt)
 	if err != nil {
 		slog.Error("ai suggest title failed", "error", err)
 		writeAIError(w, "AI request failed. Check your provider configuration.")
@@ -317,7 +332,7 @@ func (a *Admin) AIGenerateExcerpt(w http.ResponseWriter, r *http.Request) {
 of the given content in 1-2 sentences (max 160 characters). The excerpt should capture the essence
 of the content and entice readers to click. Output ONLY the excerpt text, nothing else.`
 
-	result, err := a.aiRegistry.GenerateForTask(r.Context(), ai.TaskLight, systemPrompt, prompt)
+	result, err := a.aiRegistry.GenerateForTaskAs(r.Context(), a.tenantAIProvider(r), ai.TaskLight, systemPrompt, prompt)
 	if err != nil {
 		slog.Error("ai generate excerpt failed", "error", err)
 		writeAIError(w, "AI request failed. Check your provider configuration.")
@@ -371,7 +386,7 @@ KEYWORDS: <keyword1, keyword2, keyword3, ...>
 
 Do not include any other text.`
 
-	result, err := a.aiRegistry.GenerateForTask(r.Context(), ai.TaskLight, systemPrompt, prompt)
+	result, err := a.aiRegistry.GenerateForTaskAs(r.Context(), a.tenantAIProvider(r), ai.TaskLight, systemPrompt, prompt)
 	if err != nil {
 		slog.Error("ai seo metadata failed", "error", err)
 		writeAIError(w, "AI request failed. Check your provider configuration.")
@@ -476,7 +491,7 @@ The content uses Markdown formatting — preserve all Markdown syntax.
 If the editor provided guidance, follow those instructions carefully while applying the requested tone.
 Output ONLY the rewritten content, nothing else.`, toneDesc)
 
-	result, err := a.aiRegistry.GenerateForTask(r.Context(), ai.TaskContent, systemPrompt, prompt)
+	result, err := a.aiRegistry.GenerateForTaskAs(r.Context(), a.tenantAIProvider(r), ai.TaskContent, systemPrompt, prompt)
 	if err != nil {
 		slog.Error("ai rewrite failed", "error", err)
 		writeAIError(w, "AI request failed. Check your provider configuration.")
@@ -529,7 +544,7 @@ func (a *Admin) AIExtractTags(w http.ResponseWriter, r *http.Request) {
 the given content. Tags should be short (1-3 words), lowercase, and relevant for blog categorization.
 Output ONLY the tags as a comma-separated list on a single line. No other text.`
 
-	result, err := a.aiRegistry.GenerateForTask(r.Context(), ai.TaskLight, systemPrompt, prompt)
+	result, err := a.aiRegistry.GenerateForTaskAs(r.Context(), a.tenantAIProvider(r), ai.TaskLight, systemPrompt, prompt)
 	if err != nil {
 		slog.Error("ai extract tags failed", "error", err)
 		writeAIError(w, "AI request failed. Check your provider configuration.")
@@ -565,9 +580,9 @@ Output ONLY the tags as a comma-separated list on a single line. No other text.`
 
 // --- Provider Switching ---
 
-// AISetProvider switches the active AI provider at runtime.
-// Accepts a "provider" form value and returns an HTML fragment that replaces
-// the provider selector UI to reflect the new active provider.
+// AISetProvider switches the AI provider for the current tenant.
+// Persists the choice in site_settings so each tenant can use a different
+// provider without affecting other tenants.
 func (a *Admin) AISetProvider(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("provider"))
 	if name == "" {
@@ -575,16 +590,21 @@ func (a *Admin) AISetProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.aiRegistry.SetActive(name); err != nil {
-		slog.Warn("failed to switch AI provider", "provider", name, "error", err)
+	if !a.aiRegistry.HasProvider(name) {
+		slog.Warn("failed to switch AI provider", "provider", name)
 		writeAIError(w, fmt.Sprintf("Cannot switch to %q: provider not available (no API key configured).", name))
 		return
 	}
 
-	// Update the cached AIConfig so the UI reflects the change.
-	a.refreshAIConfig(name)
+	// Persist the choice per-tenant in site_settings.
+	sess := middleware.SessionFromCtx(r.Context())
+	if err := a.siteSettingStore.Set(sess.TenantID, "ai_provider", name); err != nil {
+		slog.Error("failed to save AI provider setting", "error", err, "tenant_id", sess.TenantID)
+		writeAIError(w, "Failed to save provider setting.")
+		return
+	}
 
-	slog.Info("ai provider switched", "provider", name)
+	slog.Info("ai provider switched", "provider", name, "tenant_id", sess.TenantID)
 
 	// If this is an HTMX request from the AI assistant panel, return the
 	// updated provider selector dropdown.
@@ -606,8 +626,8 @@ func (a *Admin) AISetProvider(w http.ResponseWriter, r *http.Request) {
 
 // AIProviderStatus returns the current provider selector fragment.
 // Used by the content form to load the initial state of the provider dropdown.
-func (a *Admin) AIProviderStatus(w http.ResponseWriter, _ *http.Request) {
-	a.writeProviderSelector(w, a.aiRegistry.ActiveName())
+func (a *Admin) AIProviderStatus(w http.ResponseWriter, r *http.Request) {
+	a.writeProviderSelector(w, a.tenantAIProvider(r))
 }
 
 // AIImageProviders returns a JSON list of providers that support image
@@ -637,12 +657,16 @@ func (a *Admin) AIImageProviders(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(providers)
 }
 
-// refreshAIConfig updates the cached AIConfig after a provider switch.
-func (a *Admin) refreshAIConfig(activeName string) {
-	a.aiConfig.ActiveProvider = activeName
-	for i := range a.aiConfig.Providers {
-		a.aiConfig.Providers[i].Active = a.aiConfig.Providers[i].Name == activeName
+// providerInfoForTenant returns a copy of the provider list with the Active
+// flag set based on the tenant's stored ai_provider setting.
+func (a *Admin) providerInfoForTenant(r *http.Request) []AIProviderInfo {
+	active := a.tenantAIProvider(r)
+	providers := make([]AIProviderInfo, len(a.aiConfig.Providers))
+	copy(providers, a.aiConfig.Providers)
+	for i := range providers {
+		providers[i].Active = providers[i].Name == active
 	}
+	return providers
 }
 
 // writeProviderSelector writes an HTML fragment containing the provider
@@ -872,7 +896,7 @@ func (a *Admin) AITemplateGenerate(w http.ResponseWriter, r *http.Request) {
 	userPrompt.WriteString("Request: ")
 	userPrompt.WriteString(prompt)
 
-	result, err := a.aiRegistry.GenerateForTask(r.Context(), ai.TaskTemplate, systemPrompt, userPrompt.String())
+	result, err := a.aiRegistry.GenerateForTaskAs(r.Context(), a.tenantAIProvider(r), ai.TaskTemplate, systemPrompt, userPrompt.String())
 	if err != nil {
 		slog.Error("ai template generate failed", "error", err)
 		writeJSON(w, http.StatusOK, templateGenResponse{
