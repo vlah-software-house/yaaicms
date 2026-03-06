@@ -103,51 +103,51 @@ func Load() (*Config, error) {
 
 		ValkeyHost:     envOrDefault("VALKEY_HOST", "localhost"),
 		ValkeyPort:     envOrDefault("VALKEY_PORT", "6379"),
-		ValkeyPassword: os.Getenv("VALKEY_PASSWORD"),
+		ValkeyPassword: env("VALKEY_PASSWORD"),
 
 		BaseDomain:   envOrDefault("BASE_DOMAIN", "localhost"),
-		K8sEnabled:   os.Getenv("K8S_ENABLED") == "true",
+		K8sEnabled:   env("K8S_ENABLED") == "true",
 		K8sNamespace: envOrDefault("K8S_NAMESPACE", "yaaicms"),
 
 		AIProvider: envOrDefault("AI_PROVIDER", "gemini"),
 
-		OpenAIKey:          os.Getenv("OPENAI_API_KEY"),
+		OpenAIKey:          env("OPENAI_API_KEY"),
 		OpenAIModel:        envOrDefault("OPENAI_MODEL", "gpt-4o"),
-		OpenAIModelLight:   os.Getenv("OPENAI_MODEL_LIGHT"),
-		OpenAIModelContent: os.Getenv("OPENAI_MODEL_CONTENT"),
-		OpenAIModelTemplate: os.Getenv("OPENAI_MODEL_TEMPLATE"),
+		OpenAIModelLight:   env("OPENAI_MODEL_LIGHT"),
+		OpenAIModelContent: env("OPENAI_MODEL_CONTENT"),
+		OpenAIModelTemplate: env("OPENAI_MODEL_TEMPLATE"),
 		OpenAIModelImage:   envOrDefault("OPENAI_MODEL_IMAGE", "dall-e-3"),
 		OpenAIBaseURL:      envOrDefault("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 
-		GeminiKey:          os.Getenv("GEMINI_API_KEY"),
+		GeminiKey:          env("GEMINI_API_KEY"),
 		GeminiModel:        envOrDefault("GEMINI_MODEL", "gemini-3.1-pro-preview"),
-		GeminiModelLight:   os.Getenv("GEMINI_MODEL_LIGHT"),
-		GeminiModelContent: os.Getenv("GEMINI_MODEL_CONTENT"),
-		GeminiModelTemplate: os.Getenv("GEMINI_MODEL_TEMPLATE"),
-		GeminiModelImage:   os.Getenv("GEMINI_MODEL_IMAGE"),
+		GeminiModelLight:   env("GEMINI_MODEL_LIGHT"),
+		GeminiModelContent: env("GEMINI_MODEL_CONTENT"),
+		GeminiModelTemplate: env("GEMINI_MODEL_TEMPLATE"),
+		GeminiModelImage:   env("GEMINI_MODEL_IMAGE"),
 		GeminiBaseURL:      envOrDefault("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com"),
 
-		ClaudeKey:          os.Getenv("CLAUDE_API_KEY"),
+		ClaudeKey:          env("CLAUDE_API_KEY"),
 		ClaudeModel:        envOrDefault("CLAUDE_MODEL", "claude-sonnet-4-6"),
-		ClaudeModelLight:   os.Getenv("CLAUDE_MODEL_LIGHT"),
-		ClaudeModelContent: os.Getenv("CLAUDE_MODEL_CONTENT"),
-		ClaudeModelTemplate: os.Getenv("CLAUDE_MODEL_TEMPLATE"),
+		ClaudeModelLight:   env("CLAUDE_MODEL_LIGHT"),
+		ClaudeModelContent: env("CLAUDE_MODEL_CONTENT"),
+		ClaudeModelTemplate: env("CLAUDE_MODEL_TEMPLATE"),
 		ClaudeBaseURL:      envOrDefault("CLAUDE_BASE_URL", "https://api.anthropic.com"),
 
-		MistralKey:          os.Getenv("MISTRAL_API_KEY"),
+		MistralKey:          env("MISTRAL_API_KEY"),
 		MistralModel:        envOrDefault("MISTRAL_MODEL", "mistral-large-latest"),
-		MistralModelLight:   os.Getenv("MISTRAL_MODEL_LIGHT"),
-		MistralModelContent: os.Getenv("MISTRAL_MODEL_CONTENT"),
-		MistralModelTemplate: os.Getenv("MISTRAL_MODEL_TEMPLATE"),
+		MistralModelLight:   env("MISTRAL_MODEL_LIGHT"),
+		MistralModelContent: env("MISTRAL_MODEL_CONTENT"),
+		MistralModelTemplate: env("MISTRAL_MODEL_TEMPLATE"),
 		MistralBaseURL:      envOrDefault("MISTRAL_BASE_URL", "https://api.mistral.ai/v1"),
 
-		S3Endpoint:      os.Getenv("S3_ENDPOINT"),
+		S3Endpoint:      env("S3_ENDPOINT"),
 		S3Region:        envOrDefault("S3_REGION", "fsn1"),
-		S3AccessKey:     os.Getenv("S3_ACCESS_KEY"),
-		S3SecretKey:     os.Getenv("S3_SECRET_KEY"),
+		S3AccessKey:     env("S3_ACCESS_KEY"),
+		S3SecretKey:     env("S3_SECRET_KEY"),
 		S3BucketPublic:  envOrDefault("S3_BUCKET_PUBLIC", "yaaicms-public"),
 		S3BucketPrivate: envOrDefault("S3_BUCKET_PRIVATE", "yaaicms-private"),
-		S3PublicURL:     os.Getenv("S3_PUBLIC_URL"),
+		S3PublicURL:     env("S3_PUBLIC_URL"),
 	}
 
 	if cfg.Env == "production" {
@@ -177,9 +177,15 @@ func (c *Config) IsDev() bool {
 	return c.Env == "development"
 }
 
+// env reads an environment variable, trimming any surrounding whitespace.
+// This prevents issues with K8s secrets or env files that include trailing spaces.
+func env(key string) string {
+	return strings.TrimSpace(os.Getenv(key))
+}
+
 // envOrDefault reads an environment variable, returning a fallback if unset or empty.
 func envOrDefault(key, fallback string) string {
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+	if v := env(key); v != "" {
 		return v
 	}
 	return fallback
