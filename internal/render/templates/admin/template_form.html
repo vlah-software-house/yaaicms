@@ -67,12 +67,21 @@
                     <code>{{"{{"}} .FeaturedImageURL {{"}}"}}</code>,
                     <code>{{"{{"}} .FeaturedImageSrcset {{"}}"}}</code>,
                     <code>{{"{{"}} .FeaturedImageAlt {{"}}"}}</code>,
-                    <code>{{"{{"}} .SiteName {{"}}"}}</code>,
+                    <code>{{"{{"}} .SiteTitle {{"}}"}}</code>,
+                    <code>{{"{{"}} .Slogan {{"}}"}}</code>,
                     <code>{{"{{"}} .Year {{"}}"}}</code>,
                     <code>{{"{{"}} .Slug {{"}}"}}</code>,
-                    <code>{{"{{"}} .PublishedAt {{"}}"}}</code>
+                    <code>{{"{{"}} .PublishedAt {{"}}"}}</code>,
+                    <code>{{"{{"}} .Menus {{"}}"}}</code>
                 </p>
                 <p class="mt-1"><strong>Article loop:</strong>
+                    <code>{{"{{"}} .SiteTitle {{"}}"}}</code>,
+                    <code>{{"{{"}} .Slogan {{"}}"}}</code>,
+                    <code>{{"{{"}} .Year {{"}}"}}</code>,
+                    <code>{{"{{"}} .Header {{"}}"}}</code>,
+                    <code>{{"{{"}} .Footer {{"}}"}}</code>,
+                    <code>{{"{{"}} .Title {{"}}"}}</code>,
+                    <code>{{"{{"}} .Menus {{"}}"}}</code>,
                     <code>{{"{{"}} range .Posts {{"}}"}}</code> with
                     <code>{{"{{"}} .Title {{"}}"}}</code>,
                     <code>{{"{{"}} .Slug {{"}}"}}</code>,
@@ -83,8 +92,13 @@
                     <code>{{"{{"}} .PublishedAt {{"}}"}}</code>
                 </p>
                 <p class="mt-1"><strong>Header / Footer:</strong>
-                    <code>{{"{{"}} .SiteName {{"}}"}}</code>,
-                    <code>{{"{{"}} .Year {{"}}"}}</code>
+                    <code>{{"{{"}} .SiteTitle {{"}}"}}</code>,
+                    <code>{{"{{"}} .Slogan {{"}}"}}</code>,
+                    <code>{{"{{"}} .Year {{"}}"}}</code>,
+                    <code>{{"{{"}} .Menus {{"}}"}}</code>
+                    (use <code>{{"{{"}} range .Menus.main {{"}}"}}</code>,
+                    <code>{{"{{"}} range .Menus.footer {{"}}"}}</code>,
+                    <code>{{"{{"}} range .Menus.footer_legal {{"}}"}}</code>)
                 </p>
             </div>
         </div>
