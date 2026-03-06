@@ -591,20 +591,21 @@ func (a *Admin) AISetProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !a.aiRegistry.HasProvider(name) {
-		slog.Warn("failed to switch AI provider", "provider", name)
+		slog.Warn("failed to switch AI provider", "provider", name) //nolint:gosec // G706: slog structured logging safely escapes the value field.
 		writeAIError(w, fmt.Sprintf("Cannot switch to %q: provider not available (no API key configured).", name))
 		return
 	}
 
 	// Persist the choice per-tenant in site_settings.
 	sess := middleware.SessionFromCtx(r.Context())
-	if err := a.siteSettingStore.Set(sess.TenantID, "ai_provider", name); err != nil {
+	err := a.siteSettingStore.Set(sess.TenantID, "ai_provider", name)
+	if err != nil {
 		slog.Error("failed to save AI provider setting", "error", err, "tenant_id", sess.TenantID)
 		writeAIError(w, "Failed to save provider setting.")
 		return
 	}
 
-	slog.Info("ai provider switched", "provider", name, "tenant_id", sess.TenantID)
+	slog.Info("ai provider switched", "provider", name, "tenant_id", sess.TenantID) //nolint:gosec // G706: name is validated by HasProvider; only known provider names reach here.
 
 	// If this is an HTMX request from the AI assistant panel, return the
 	// updated provider selector dropdown.

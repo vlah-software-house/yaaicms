@@ -556,6 +556,7 @@ func (a *Admin) updateContent(w http.ResponseWriter, r *http.Request, section st
 
 	// Generate AI revision title + changelog in the background.
 	if created != nil {
+		//nolint:gosec,contextcheck // G118: intentionally uses context.Background — goroutine outlives the HTTP request.
 		go a.generateRevisionMeta(created.ID, rev, item, revisionMessage, a.tenantAIProvider(r))
 	}
 
@@ -1018,6 +1019,7 @@ func (a *Admin) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 			slog.Error("failed to create template revision", "error", revErr)
 		} else {
 			// Generate AI revision metadata in background.
+			//nolint:gosec,contextcheck // G118: intentionally uses context.Background — goroutine outlives the HTTP request.
 			go a.generateTemplateRevisionMeta(created.ID, oldName, oldHTML, newName, htmlContent, revisionMessage, a.tenantAIProvider(r))
 		}
 	}
