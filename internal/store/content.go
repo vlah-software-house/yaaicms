@@ -182,6 +182,30 @@ func (s *ContentStore) ListPublishedByType(tenantID uuid.UUID, contentType model
 	return items, rows.Err()
 }
 
+// ListPublishedByAuthor returns all published content by a specific author.
+func (s *ContentStore) ListPublishedByAuthor(tenantID, authorID uuid.UUID) ([]models.Content, error) {
+	rows, err := s.db.Query(`
+		SELECT `+contentColumns+`
+		FROM content
+		WHERE tenant_id = $1 AND author_id = $2 AND status = 'published'
+		ORDER BY published_at DESC NULLS LAST
+	`, tenantID, authorID)
+	if err != nil {
+		return nil, fmt.Errorf("list published by author: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []models.Content
+	for rows.Next() {
+		c, err := scanContent(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan content: %w", err)
+		}
+		items = append(items, *c)
+	}
+	return items, rows.Err()
+}
+
 // CountByType returns the number of content items of the given type.
 func (s *ContentStore) CountByType(tenantID uuid.UUID, contentType models.ContentType) (int, error) {
 	var count int

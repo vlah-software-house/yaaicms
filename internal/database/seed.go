@@ -38,6 +38,9 @@ func Seed(db *sql.DB) error {
 	if err := seedMenus(db); err != nil {
 		return fmt.Errorf("seed menus: %w", err)
 	}
+	if err := seedAdminProfile(db); err != nil {
+		return fmt.Errorf("seed admin profile: %w", err)
+	}
 	return nil
 }
 
@@ -337,5 +340,34 @@ func seedMenus(db *sql.DB) error {
 	}
 
 	slog.Info("seeded menu locations", "count", 3)
+	return nil
+}
+
+// seedAdminProfile creates a profile for the admin user if none exists.
+func seedAdminProfile(db *sql.DB) error {
+	// Find the admin user.
+	var userID string
+	err := db.QueryRow("SELECT id FROM users WHERE email = 'admin@yaaicms.local'").Scan(&userID)
+	if err != nil {
+		return nil // No admin user yet — skip.
+	}
+
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM user_profiles WHERE user_id = $1", userID).Scan(&count); err != nil {
+		return fmt.Errorf("check admin profile: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO user_profiles (user_id, slug, bio, job_title, is_published)
+		VALUES ($1, 'admin', 'Site administrator.', 'Administrator', TRUE)
+	`, userID)
+	if err != nil {
+		return fmt.Errorf("seed admin profile: %w", err)
+	}
+
+	slog.Info("seeded admin user profile")
 	return nil
 }

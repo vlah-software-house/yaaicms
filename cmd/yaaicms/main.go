@@ -112,6 +112,7 @@ func main() {
 	siteSettingStore := store.NewSiteSettingStore(db)
 	categoryStore := store.NewCategoryStore(db)
 	menuStore := store.NewMenuStore(db)
+	userProfileStore := store.NewUserProfileStore(db)
 
 	// Connect to S3-compatible object storage (optional — app works without it).
 	var storageClient *storage.Client
@@ -179,9 +180,9 @@ func main() {
 	k8sManager := k8s.NewManager(cfg.K8sNamespace, cfg.K8sEnabled)
 
 	// Create handler groups with their dependencies.
-	adminHandlers := handlers.NewAdmin(renderer, sessionStore, contentStore, userStore, templateStore, mediaStore, variantStore, revisionStore, templateRevisionStore, themeStore, siteSettingStore, categoryStore, menuStore, storageClient, eng, pageCache, cacheLogStore, aiRegistry, aiCfg)
+	adminHandlers := handlers.NewAdmin(renderer, sessionStore, contentStore, userStore, templateStore, mediaStore, variantStore, revisionStore, templateRevisionStore, themeStore, siteSettingStore, categoryStore, menuStore, userProfileStore, storageClient, eng, pageCache, cacheLogStore, aiRegistry, aiCfg)
 	authHandlers := handlers.NewAuth(renderer, sessionStore, userStore)
-	publicHandlers := handlers.NewPublic(eng, contentStore, siteSettingStore, menuStore, mediaStore, variantStore, storageClient, pageCache, tenantResolver, cfg.BaseDomain)
+	publicHandlers := handlers.NewPublic(eng, contentStore, siteSettingStore, menuStore, mediaStore, variantStore, userProfileStore, storageClient, pageCache, tenantResolver, cfg.BaseDomain)
 	tenantHandlers := handlers.NewTenantAdmin(renderer, sessionStore, tenantStore, userStore, domainStore, k8sManager, valkeyClient, cfg.BaseDomain)
 
 	// Set up the Chi router with all middleware and routes.

@@ -32,6 +32,7 @@ type Public struct {
 	menuStore        *store.MenuStore
 	mediaStore       *store.MediaStore
 	variantStore     *store.VariantStore
+	userProfileStore *store.UserProfileStore
 	storageClient    *storage.Client
 	pageCache        *cache.PageCache
 	domainResolver   middleware.DomainResolver
@@ -41,7 +42,7 @@ type Public struct {
 // NewPublic creates a new Public handler group. mediaStore, variantStore,
 // and storageClient may be nil if S3 is not configured.
 // domainResolver and baseDomain are used to compute canonical URLs for SEO meta tags.
-func NewPublic(eng *engine.Engine, contentStore *store.ContentStore, siteSettingStore *store.SiteSettingStore, menuStore *store.MenuStore, mediaStore *store.MediaStore, variantStore *store.VariantStore, storageClient *storage.Client, pageCache *cache.PageCache, domainResolver middleware.DomainResolver, baseDomain string) *Public {
+func NewPublic(eng *engine.Engine, contentStore *store.ContentStore, siteSettingStore *store.SiteSettingStore, menuStore *store.MenuStore, mediaStore *store.MediaStore, variantStore *store.VariantStore, userProfileStore *store.UserProfileStore, storageClient *storage.Client, pageCache *cache.PageCache, domainResolver middleware.DomainResolver, baseDomain string) *Public {
 	return &Public{
 		engine:           eng,
 		contentStore:     contentStore,
@@ -49,6 +50,7 @@ func NewPublic(eng *engine.Engine, contentStore *store.ContentStore, siteSetting
 		menuStore:        menuStore,
 		mediaStore:       mediaStore,
 		variantStore:     variantStore,
+		userProfileStore: userProfileStore,
 		storageClient:    storageClient,
 		pageCache:        pageCache,
 		domainResolver:   domainResolver,
@@ -85,7 +87,8 @@ func (p *Public) Homepage(w http.ResponseWriter, r *http.Request) {
 	if len(posts) > 0 {
 		siteTitle, slogan := p.loadSiteTitleAndSlogan(tenant.ID, tenant.Name)
 		menus := p.loadMenus(tenant.ID, "")
-		rendered, err := p.engine.RenderPostList(tenant.ID, siteTitle, slogan, posts, p.resolveFeaturedImages(tenant.ID, posts), menus)
+		authors := p.loadAuthors(posts)
+		rendered, err := p.engine.RenderPostList(tenant.ID, siteTitle, slogan, posts, p.resolveFeaturedImages(tenant.ID, posts), authors, menus)
 		if err == nil {
 			p.pageCache.Set(ctx, cache.HomepageKey(tenant.ID.String()), rendered)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -100,7 +103,8 @@ func (p *Public) Homepage(w http.ResponseWriter, r *http.Request) {
 	if err == nil && home != nil {
 		siteTitle, slogan := p.loadSiteTitleAndSlogan(tenant.ID, tenant.Name)
 		menus := p.loadMenus(tenant.ID, "home")
-		rendered, err := p.engine.RenderPage(tenant.ID, siteTitle, slogan, home, p.resolveFeaturedImage(tenant.ID, home), p.buildSocialMeta(tenant, home.Type, "/"), menus)
+		author := p.loadAuthor(home.AuthorID)
+		rendered, err := p.engine.RenderPage(tenant.ID, siteTitle, slogan, home, p.resolveFeaturedImage(tenant.ID, home), p.buildSocialMeta(tenant, home.Type, "/"), menus, author)
 		if err == nil {
 			p.pageCache.Set(ctx, cache.HomepageKey(tenant.ID.String()), rendered)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -156,7 +160,8 @@ func (p *Public) Page(w http.ResponseWriter, r *http.Request) {
 
 	siteTitle, slogan := p.loadSiteTitleAndSlogan(tenant.ID, tenant.Name)
 	menus := p.loadMenus(tenant.ID, slugParam)
-	rendered, err := p.engine.RenderPage(tenant.ID, siteTitle, slogan, content, p.resolveFeaturedImage(tenant.ID, content), p.buildSocialMeta(tenant, content.Type, "/"+content.Slug), menus)
+	author := p.loadAuthor(content.AuthorID)
+	rendered, err := p.engine.RenderPage(tenant.ID, siteTitle, slogan, content, p.resolveFeaturedImage(tenant.ID, content), p.buildSocialMeta(tenant, content.Type, "/"+content.Slug), menus, author)
 	if err != nil {
 		slog.Error("render page failed", "error", err, "slug", slugParam)
 		// Fall back to a safe error page when the template engine fails.
@@ -179,6 +184,143 @@ func (p *Public) Page(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(rendered)
+}
+
+// AuthorPage renders a public author profile page with their published posts.
+func (p *Public) AuthorPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	authorSlug := chi.URLParam(r, "slug")
+
+	tenant := middleware.TenantFromCtx(ctx)
+	if tenant == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Look up the author by their profile slug.
+	userID, displayName, profile, err := p.userProfileStore.FindAuthorBySlug(authorSlug)
+	if err != nil {
+		slog.Error("find author by slug failed", "error", err, "slug", authorSlug)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	if profile == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	author := engine.TemplateAuthor{
+		Name:      displayName,
+		Bio:       profile.Bio,
+		AvatarURL: profile.AvatarURL,
+		Website:   profile.Website,
+		Location:  profile.Location,
+		JobTitle:  profile.JobTitle,
+		Pronouns:  profile.Pronouns,
+		Twitter:   profile.Twitter,
+		GitHub:    profile.GitHub,
+		LinkedIn:  profile.LinkedIn,
+		Instagram: profile.Instagram,
+		Slug:      profile.Slug,
+	}
+
+	// Load the author's published posts.
+	posts, err := p.contentStore.ListPublishedByAuthor(tenant.ID, userID)
+	if err != nil {
+		slog.Error("list posts by author failed", "error", err)
+	}
+
+	siteTitle, slogan := p.loadSiteTitleAndSlogan(tenant.ID, tenant.Name)
+	menus := p.loadMenus(tenant.ID, "")
+
+	// Build PostItems with featured images.
+	featuredImages := p.resolveFeaturedImages(tenant.ID, posts)
+	var postItems []engine.PostItem
+	for _, post := range posts {
+		item := engine.PostItem{
+			Title:      post.Title,
+			Slug:       post.Slug,
+			AuthorName: displayName,
+			AuthorSlug: profile.Slug,
+		}
+		if post.Excerpt != nil {
+			item.Excerpt = *post.Excerpt
+		}
+		if post.PublishedAt != nil {
+			item.PublishedAt = post.PublishedAt.Format("January 2, 2006")
+		}
+		if img := featuredImages[post.ID.String()]; img != nil {
+			item.FeaturedImageURL = img.URL
+			item.FeaturedImageSrcset = img.Srcset
+			item.FeaturedImageAlt = img.Alt
+		}
+		postItems = append(postItems, item)
+	}
+
+	rendered, err := p.engine.RenderAuthorPage(tenant.ID, siteTitle, slogan, author, postItems, menus)
+	if err != nil {
+		slog.Error("render author page failed", "error", err, "slug", authorSlug)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(rendered)
+}
+
+// loadAuthor loads an author's profile and converts it to a TemplateAuthor.
+// Returns nil if the profile doesn't exist or can't be loaded.
+func (p *Public) loadAuthor(authorID uuid.UUID) *engine.TemplateAuthor {
+	displayName, profile, err := p.userProfileStore.FindAuthorByUserID(authorID)
+	if err != nil {
+		slog.Warn("load author profile failed", "error", err)
+		return nil
+	}
+	author := &engine.TemplateAuthor{Name: displayName}
+	if profile != nil {
+		author.Bio = profile.Bio
+		author.AvatarURL = profile.AvatarURL
+		author.Website = profile.Website
+		author.Location = profile.Location
+		author.JobTitle = profile.JobTitle
+		author.Pronouns = profile.Pronouns
+		author.Twitter = profile.Twitter
+		author.GitHub = profile.GitHub
+		author.LinkedIn = profile.LinkedIn
+		author.Instagram = profile.Instagram
+		// Only expose the author slug (for /author/{slug} links) when the
+		// profile is published. This prevents templates from linking to a 404.
+		if profile.IsPublished {
+			author.Slug = profile.Slug
+		}
+	}
+	return author
+}
+
+// loadAuthors batch-loads author profiles for a list of posts and returns
+// a map of user ID → TemplateAuthor suitable for passing to RenderPostList.
+func (p *Public) loadAuthors(posts []models.Content) map[uuid.UUID]*engine.TemplateAuthor {
+	// Collect unique author IDs.
+	seen := make(map[uuid.UUID]bool)
+	var authorIDs []uuid.UUID
+	for _, post := range posts {
+		if !seen[post.AuthorID] {
+			seen[post.AuthorID] = true
+			authorIDs = append(authorIDs, post.AuthorID)
+		}
+	}
+
+	if len(authorIDs) == 0 {
+		return nil
+	}
+
+	result := make(map[uuid.UUID]*engine.TemplateAuthor)
+	for _, id := range authorIDs {
+		if a := p.loadAuthor(id); a != nil {
+			result[id] = a
+		}
+	}
+	return result
 }
 
 // buildSocialMeta constructs the SocialMeta context for a page render.

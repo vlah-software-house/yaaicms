@@ -295,6 +295,10 @@
                                 <p class="text-sm text-gray-900">{{.Session.DisplayName}}</p>
                                 <p class="text-xs text-gray-500">{{.Session.Email}}</p>
                             </div>
+                            <a href="/admin/profile" hx-get="/admin/profile" hx-target="#main-content" hx-push-url="true"
+                               class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                Edit Profile
+                            </a>
                             <form method="POST" action="/admin/logout">
                                 <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                                 <button type="submit"

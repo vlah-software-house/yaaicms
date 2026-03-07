@@ -261,6 +261,15 @@ func (s *UserStore) Delete(userID uuid.UUID) error {
 	return nil
 }
 
+// UpdateDisplayName changes a user's display name.
+func (s *UserStore) UpdateDisplayName(userID uuid.UUID, name string) error {
+	_, err := s.db.Exec(`UPDATE users SET display_name = $1, updated_at = NOW() WHERE id = $2`, name, userID)
+	if err != nil {
+		return fmt.Errorf("update display name: %w", err)
+	}
+	return nil
+}
+
 // CheckPassword verifies a plaintext password against the user's stored hash.
 func (s *UserStore) CheckPassword(user *models.User, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) == nil

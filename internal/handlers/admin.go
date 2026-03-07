@@ -65,6 +65,7 @@ type Admin struct {
 	siteSettingStore      *store.SiteSettingStore
 	categoryStore         *store.CategoryStore
 	menuStore             *store.MenuStore
+	userProfileStore      *store.UserProfileStore
 	storageClient         *storage.Client
 	engine                *engine.Engine
 	pageCache             *cache.PageCache
@@ -75,7 +76,7 @@ type Admin struct {
 
 // NewAdmin creates a new Admin handler group with the given dependencies.
 // storageClient, mediaStore, and variantStore may be nil if S3 is not configured.
-func NewAdmin(renderer *render.Renderer, sessions *session.Store, contentStore *store.ContentStore, userStore *store.UserStore, templateStore *store.TemplateStore, mediaStore *store.MediaStore, variantStore *store.VariantStore, revisionStore *store.RevisionStore, templateRevisionStore *store.TemplateRevisionStore, themeStore *store.DesignThemeStore, siteSettingStore *store.SiteSettingStore, categoryStore *store.CategoryStore, menuStore *store.MenuStore, storageClient *storage.Client, eng *engine.Engine, pageCache *cache.PageCache, cacheLog *store.CacheLogStore, aiRegistry *ai.Registry, aiCfg *AIConfig) *Admin {
+func NewAdmin(renderer *render.Renderer, sessions *session.Store, contentStore *store.ContentStore, userStore *store.UserStore, templateStore *store.TemplateStore, mediaStore *store.MediaStore, variantStore *store.VariantStore, revisionStore *store.RevisionStore, templateRevisionStore *store.TemplateRevisionStore, themeStore *store.DesignThemeStore, siteSettingStore *store.SiteSettingStore, categoryStore *store.CategoryStore, menuStore *store.MenuStore, userProfileStore *store.UserProfileStore, storageClient *storage.Client, eng *engine.Engine, pageCache *cache.PageCache, cacheLog *store.CacheLogStore, aiRegistry *ai.Registry, aiCfg *AIConfig) *Admin {
 	return &Admin{
 		renderer:              renderer,
 		sessions:              sessions,
@@ -90,6 +91,7 @@ func NewAdmin(renderer *render.Renderer, sessions *session.Store, contentStore *
 		siteSettingStore:      siteSettingStore,
 		categoryStore:         categoryStore,
 		menuStore:             menuStore,
+		userProfileStore:      userProfileStore,
 		storageClient:         storageClient,
 		engine:                eng,
 		pageCache:             pageCache,
@@ -1483,6 +1485,88 @@ func (a *Admin) SettingsSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/admin/settings", http.StatusSeeOther)
+}
+
+// --- Profile ---
+
+// ProfilePage renders the user's own profile editing page.
+func (a *Admin) ProfilePage(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+	profile, err := a.userProfileStore.FindByUserID(sess.UserID)
+	if err != nil {
+		slog.Error("load user profile failed", "error", err)
+	}
+
+	a.renderer.Page(w, r, "profile", &render.PageData{
+		Title:   "Edit Profile",
+		Section: "profile",
+		Data: map[string]any{
+			"Profile":     profile,
+			"DisplayName": sess.DisplayName,
+		},
+	})
+}
+
+// ProfileSave handles POST /admin/profile to update the user's profile.
+func (a *Admin) ProfileSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	sess := middleware.SessionFromCtx(r.Context())
+
+	// Update display name on the users table if changed.
+	newDisplayName := strings.TrimSpace(r.FormValue("display_name"))
+	if newDisplayName == "" {
+		newDisplayName = sess.DisplayName
+	}
+	if newDisplayName != sess.DisplayName {
+		if err := a.userStore.UpdateDisplayName(sess.UserID, newDisplayName); err != nil {
+			slog.Error("update display name failed", "error", err)
+			http.Error(w, "failed to update display name", http.StatusInternalServerError)
+			return
+		}
+		// Update session so the admin header reflects the new name immediately.
+		sess.DisplayName = newDisplayName
+		if err := a.sessions.Update(r.Context(), r, sess); err != nil {
+			slog.Warn("failed to update session after display name change", "error", err)
+		}
+	}
+
+	// Build profile from form values and upsert.
+	profile := &models.UserProfile{
+		UserID:      sess.UserID,
+		Slug:        slug.Generate(newDisplayName),
+		Bio:         strings.TrimSpace(r.FormValue("bio")),
+		AvatarURL:   strings.TrimSpace(r.FormValue("avatar_url")),
+		Website:     strings.TrimSpace(r.FormValue("website")),
+		Location:    strings.TrimSpace(r.FormValue("location")),
+		JobTitle:    strings.TrimSpace(r.FormValue("job_title")),
+		Pronouns:    strings.TrimSpace(r.FormValue("pronouns")),
+		Twitter:     strings.TrimSpace(r.FormValue("twitter")),
+		GitHub:      strings.TrimSpace(r.FormValue("github")),
+		LinkedIn:    strings.TrimSpace(r.FormValue("linkedin")),
+		Instagram:   strings.TrimSpace(r.FormValue("instagram")),
+		IsPublished: r.FormValue("is_published") == "on",
+	}
+
+	if err := a.userProfileStore.Upsert(profile); err != nil {
+		slog.Error("upsert user profile failed", "error", err)
+		http.Error(w, "failed to save profile", http.StatusInternalServerError)
+		return
+	}
+
+	// Invalidate page cache since author data appears on public pages.
+	a.pageCache.InvalidateAll(r.Context())
+
+	slog.Info("user profile updated", "user_id", sess.UserID)
+
+	if r.Header.Get("HX-Request") == "true" {
+		a.ProfilePage(w, r)
+		return
+	}
+	http.Redirect(w, r, "/admin/profile", http.StatusSeeOther)
 }
 
 // --- Help ---

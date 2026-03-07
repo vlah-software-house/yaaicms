@@ -174,10 +174,11 @@ func newTestEnv(t *testing.T) *testEnv {
 	siteSettingStore := store.NewSiteSettingStore(db)
 	categoryStore := store.NewCategoryStore(db)
 	menuStore := store.NewMenuStore(db)
+	userProfileStore := store.NewUserProfileStore(db)
 	admin := NewAdmin(renderer, sessions, contentStore, userStore, templateStore,
-		mediaStore, nil, nil, nil, nil, siteSettingStore, categoryStore, menuStore, nil, eng, pageCache, cacheLogStore, aiRegistry, aiCfg)
+		mediaStore, nil, nil, nil, nil, siteSettingStore, categoryStore, menuStore, userProfileStore, nil, eng, pageCache, cacheLogStore, aiRegistry, aiCfg)
 	auth := NewAuth(renderer, sessions, userStore)
-	public := NewPublic(eng, contentStore, siteSettingStore, menuStore, nil, nil, nil, pageCache, nil, "localhost")
+	public := NewPublic(eng, contentStore, siteSettingStore, menuStore, nil, nil, userProfileStore, nil, pageCache, nil, "localhost")
 
 	return &testEnv{
 		DB:            db,

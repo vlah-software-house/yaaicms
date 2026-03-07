@@ -79,6 +79,23 @@ type FragmentData struct {
 	Menus     Menus
 }
 
+// TemplateAuthor holds author/profile data available in templates.
+// Templates use {{.Author.Name}}, {{.Author.Bio}}, etc.
+type TemplateAuthor struct {
+	Name      string
+	Bio       string
+	AvatarURL string
+	Website   string
+	Location  string
+	JobTitle  string
+	Pronouns  string
+	Twitter   string
+	GitHub    string
+	LinkedIn  string
+	Instagram string
+	Slug      string
+}
+
 // PageData holds all variables available to a page template when rendering
 // a public page. Template authors (or AI) can use these as {{.Title}}, etc.
 type PageData struct {
@@ -94,6 +111,7 @@ type PageData struct {
 	FeaturedImageAlt    string        // Alt text for the featured image
 	Slug                string
 	PublishedAt         string
+	Author              TemplateAuthor
 	Header              template.HTML // Pre-rendered header fragment
 	Footer              template.HTML // Pre-rendered footer fragment
 	Year                int
@@ -109,6 +127,9 @@ type PostItem struct {
 	FeaturedImageSrcset string // Responsive srcset for the featured image
 	FeaturedImageAlt    string // Alt text for the featured image
 	PublishedAt         string
+	AuthorName          string // Author's display name
+	AuthorAvatarURL     string // Author's avatar URL
+	AuthorSlug          string // Author's profile slug for /author/{slug} links
 }
 
 // ListData holds variables available to the article_loop template.
@@ -121,6 +142,19 @@ type ListData struct {
 	Footer   template.HTML
 	Year     int
 	Menus    Menus
+}
+
+// AuthorPageData holds variables available to the author page template.
+// It combines the author's profile with their published posts.
+type AuthorPageData struct {
+	SiteTitle string
+	Slogan    string
+	Author    TemplateAuthor
+	Posts     []PostItem
+	Header    template.HTML
+	Footer    template.HTML
+	Year      int
+	Menus     Menus
 }
 
 // Engine compiles and renders templates from the database. It maintains
@@ -174,7 +208,8 @@ func (e *Engine) InvalidateAllTemplates() {
 // img holds the featured image data including responsive variants (pass nil if none).
 // siteTitle is the public-facing title from Settings; slogan is the tagline.
 // social carries SEO/social meta context; pass nil to skip meta tag injection.
-func (e *Engine) RenderPage(tenantID uuid.UUID, siteTitle, slogan string, content *models.Content, img *FeaturedImage, social *SocialMeta, menus Menus) ([]byte, error) {
+// author carries the content author's profile data; pass nil to omit.
+func (e *Engine) RenderPage(tenantID uuid.UUID, siteTitle, slogan string, content *models.Content, img *FeaturedImage, social *SocialMeta, menus Menus, author *TemplateAuthor) ([]byte, error) {
 	// Build fragment data for header/footer (menus, site title, slogan, year).
 	fragData := &FragmentData{
 		SiteTitle: siteTitle,
@@ -238,6 +273,10 @@ func (e *Engine) RenderPage(tenantID uuid.UUID, siteTitle, slogan string, conten
 		Menus:       menus,
 	}
 
+	if author != nil {
+		data.Author = *author
+	}
+
 	if img != nil {
 		data.FeaturedImageURL = img.URL
 		data.FeaturedImageSrcset = img.Srcset
@@ -275,7 +314,8 @@ func (e *Engine) RenderPage(tenantID uuid.UUID, siteTitle, slogan string, conten
 // tenantID scopes the template lookup. siteTitle and slogan come from Settings.
 // featuredImages maps content ID strings to their featured image data
 // including responsive variants.
-func (e *Engine) RenderPostList(tenantID uuid.UUID, siteTitle, slogan string, posts []models.Content, featuredImages map[string]*FeaturedImage, menus Menus) ([]byte, error) {
+// authors maps author user IDs to their TemplateAuthor data (may be nil).
+func (e *Engine) RenderPostList(tenantID uuid.UUID, siteTitle, slogan string, posts []models.Content, featuredImages map[string]*FeaturedImage, authors map[uuid.UUID]*TemplateAuthor, menus Menus) ([]byte, error) {
 	// Build fragment data for header/footer (menus, site title, slogan, year).
 	fragData := &FragmentData{
 		SiteTitle: siteTitle,
@@ -318,6 +358,11 @@ func (e *Engine) RenderPostList(tenantID uuid.UUID, siteTitle, slogan string, po
 			item.FeaturedImageSrcset = img.Srcset
 			item.FeaturedImageAlt = img.Alt
 		}
+		if a := authors[p.AuthorID]; a != nil {
+			item.AuthorName = a.Name
+			item.AuthorAvatarURL = a.AvatarURL
+			item.AuthorSlug = a.Slug
+		}
 		postItems = append(postItems, item)
 	}
 
@@ -330,6 +375,54 @@ func (e *Engine) RenderPostList(tenantID uuid.UUID, siteTitle, slogan string, po
 		Footer:   template.HTML(footer),
 		Year:     time.Now().Year(),
 		Menus:    menus,
+	}
+
+	rendered, err := e.compileAndRender(loopTmpl.ID.String(), loopTmpl.Version, loopTmpl.HTMLContent, data)
+	if err != nil {
+		return nil, err
+	}
+
+	result := injectContentCSS(rendered)
+	result = injectAlpineJS(result)
+	return result, nil
+}
+
+// RenderAuthorPage renders the author profile page with their published posts.
+// It reuses the article_loop template but passes AuthorPageData instead of ListData.
+func (e *Engine) RenderAuthorPage(tenantID uuid.UUID, siteTitle, slogan string, author TemplateAuthor, posts []PostItem, menus Menus) ([]byte, error) {
+	fragData := &FragmentData{
+		SiteTitle: siteTitle,
+		Slogan:    slogan,
+		Year:      time.Now().Year(),
+		Menus:     menus,
+	}
+
+	header, err := e.renderFragment(tenantID, models.TemplateTypeHeader, fragData)
+	if err != nil {
+		slog.Warn("header template not found or failed", "error", err)
+		header = ""
+	}
+
+	footer, err := e.renderFragment(tenantID, models.TemplateTypeFooter, fragData)
+	if err != nil {
+		slog.Warn("footer template not found or failed", "error", err)
+		footer = ""
+	}
+
+	loopTmpl, err := e.templateStore.FindActiveByType(tenantID, models.TemplateTypeArticleLoop)
+	if err != nil || loopTmpl == nil {
+		return nil, fmt.Errorf("no active article_loop template found")
+	}
+
+	data := AuthorPageData{
+		SiteTitle: siteTitle,
+		Slogan:    slogan,
+		Author:    author,
+		Posts:     posts,
+		Header:    template.HTML(header),
+		Footer:    template.HTML(footer),
+		Year:      time.Now().Year(),
+		Menus:     menus,
 	}
 
 	rendered, err := e.compileAndRender(loopTmpl.ID.String(), loopTmpl.Version, loopTmpl.HTMLContent, data)

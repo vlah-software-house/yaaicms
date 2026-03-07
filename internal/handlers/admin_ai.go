@@ -1402,6 +1402,20 @@ func (a *Admin) buildRealPagePreview(tenantID uuid.UUID, contentID string) any {
 		Year:        time.Now().Year(),
 	}
 
+	// Resolve author profile for preview.
+	if a.userProfileStore != nil {
+		displayName, profile, err := a.userProfileStore.FindAuthorByUserID(content.AuthorID)
+		if err == nil {
+			data.Author = engine.TemplateAuthor{Name: displayName}
+			if profile != nil {
+				data.Author.Bio = profile.Bio
+				data.Author.AvatarURL = profile.AvatarURL
+				data.Author.Slug = profile.Slug
+				data.Author.JobTitle = profile.JobTitle
+			}
+		}
+	}
+
 	if content.Excerpt != nil {
 		data.Excerpt = *content.Excerpt
 	}
@@ -1457,6 +1471,30 @@ func (a *Admin) buildRealArticleLoopPreview(tenantID uuid.UUID) any {
 		variantMap, _ = a.variantStore.FindByMediaIDs(mediaIDs)
 	}
 
+	// Batch-load author profiles for preview.
+	authorProfiles := make(map[uuid.UUID]*engine.TemplateAuthor)
+	if a.userProfileStore != nil {
+		authorSeen := make(map[uuid.UUID]bool)
+		var authorIDs []uuid.UUID
+		for _, p := range posts {
+			if !authorSeen[p.AuthorID] {
+				authorSeen[p.AuthorID] = true
+				authorIDs = append(authorIDs, p.AuthorID)
+			}
+		}
+		for _, aid := range authorIDs {
+			displayName, profile, err := a.userProfileStore.FindAuthorByUserID(aid)
+			if err == nil {
+				ta := &engine.TemplateAuthor{Name: displayName}
+				if profile != nil {
+					ta.AvatarURL = profile.AvatarURL
+					ta.Slug = profile.Slug
+				}
+				authorProfiles[aid] = ta
+			}
+		}
+	}
+
 	var postItems []engine.PostItem
 	for _, p := range posts {
 		item := engine.PostItem{
@@ -1468,6 +1506,11 @@ func (a *Admin) buildRealArticleLoopPreview(tenantID uuid.UUID) any {
 		}
 		if p.PublishedAt != nil {
 			item.PublishedAt = p.PublishedAt.Format("January 2, 2006")
+		}
+		if a := authorProfiles[p.AuthorID]; a != nil {
+			item.AuthorName = a.Name
+			item.AuthorAvatarURL = a.AvatarURL
+			item.AuthorSlug = a.Slug
 		}
 
 		// Resolve featured image.
@@ -1729,9 +1772,30 @@ Site-level:
 - {{.Year}} (int, always set)
   Current year. Available but rarely needed in page templates (footer handles copyright).
 
+Author (biographical data about the content author):
+- {{.Author.Name}} (string, always set) — The author's display name. Show as a byline near the title.
+- {{.Author.Bio}} (string, may be empty) — Short biography. Show below the byline if set.
+- {{.Author.AvatarURL}} (string, may be empty) — URL to the author's avatar image. Show as a small circular image.
+- {{.Author.Website}} (string, may be empty) — Author's personal website URL.
+- {{.Author.JobTitle}} (string, may be empty) — Author's job title or role.
+- {{.Author.Pronouns}} (string, may be empty) — Author's pronouns.
+- {{.Author.Slug}} (string, may be empty) — URL slug for the author's page. Link as: /author/{{.Author.Slug}}
+- {{.Author.Twitter}}, {{.Author.GitHub}}, {{.Author.LinkedIn}}, {{.Author.Instagram}} (strings, may be empty) — Social links.
+
+  RECOMMENDED author byline pattern:
+  <div class="flex items-center gap-3 mt-4">
+    {{if .Author.AvatarURL}}<img src="{{.Author.AvatarURL}}" alt="{{.Author.Name}}" class="h-10 w-10 rounded-full object-cover">{{end}}
+    <div>
+      {{if .Author.Slug}}<a href="/author/{{.Author.Slug}}" class="text-sm font-medium text-gray-900 hover:text-indigo-600">{{.Author.Name}}</a>
+      {{else}}<span class="text-sm font-medium text-gray-900">{{.Author.Name}}</span>{{end}}
+      {{if .Author.JobTitle}}<p class="text-xs text-gray-500">{{.Author.JobTitle}}</p>{{end}}
+    </div>
+  </div>
+
 DESIGN GUIDELINES:
 - Structure: <html> → <head> (with TailwindCSS + AlpineJS CDNs, meta tags) → <body> → {{.Header}} → <main> → {{.Footer}}
 - Use a hero section with the title, date, and optional featured image.
+- Include an author byline with avatar, name (linked to /author/slug), and optional job title.
 - Render {{.Body}} inside a prose container for proper typography.
 - Make the layout responsive: full-width on mobile, max-w-4xl centered on desktop.`
 
@@ -1780,6 +1844,10 @@ Each post item has these fields:
 
 - {{.FeaturedImageAlt}} (string, empty if no image)
   Alt text for the featured image.
+
+- {{.AuthorName}} (string, may be empty) — The post author's display name.
+- {{.AuthorAvatarURL}} (string, may be empty) — URL to the author's avatar image.
+- {{.AuthorSlug}} (string, may be empty) — Author's profile slug. Link as: /author/{{.AuthorSlug}}
 
   RECOMMENDED post card image pattern:
   {{if .FeaturedImageURL}}
@@ -1836,9 +1904,20 @@ func buildPreviewData(tmplType string) any {
 			FeaturedImageAlt:    "A preview featured image",
 			Slug:                "preview-page",
 			PublishedAt:         "February 25, 2026",
-			Header:              "<header class='bg-gray-800 text-white p-4'><nav class='max-w-6xl mx-auto flex justify-between items-center'><span class='text-xl font-bold'>YaaiCMS</span><div class='space-x-4'><a href='/' class='hover:text-gray-300'>Home</a><a href='/blog' class='hover:text-gray-300'>Blog</a></div></nav></header>",
-			Footer:              "<footer class='bg-gray-800 text-gray-400 p-6 text-center text-sm'>&copy; 2026 YaaiCMS. All rights reserved.</footer>",
-			Year:                2026,
+			Author: engine.TemplateAuthor{
+				Name:      "Jane Doe",
+				Bio:       "Tech writer and open-source enthusiast. Sharing insights on modern web development.",
+				AvatarURL: "https://placehold.co/80x80/4f46e5/ffffff?text=JD",
+				Website:   "https://janedoe.dev",
+				JobTitle:  "Senior Developer",
+				Pronouns:  "she/her",
+				Slug:      "jane-doe",
+				Twitter:   "@janedoe",
+				GitHub:    "janedoe",
+			},
+			Header: "<header class='bg-gray-800 text-white p-4'><nav class='max-w-6xl mx-auto flex justify-between items-center'><span class='text-xl font-bold'>YaaiCMS</span><div class='space-x-4'><a href='/' class='hover:text-gray-300'>Home</a><a href='/blog' class='hover:text-gray-300'>Blog</a></div></nav></header>",
+			Footer: "<footer class='bg-gray-800 text-gray-400 p-6 text-center text-sm'>&copy; 2026 YaaiCMS. All rights reserved.</footer>",
+			Year:   2026,
 			Menus: engine.Menus{
 				"main":         {{Label: "Home", URL: "/", Active: true}, {Label: "About", URL: "/about"}, {Label: "Blog", URL: "/blog"}},
 				"footer":       {{Label: "About", URL: "/about"}, {Label: "Contact", URL: "/contact"}},
@@ -1851,9 +1930,9 @@ func buildPreviewData(tmplType string) any {
 			Slogan:    "Your AI-powered CMS",
 			Title:     "Blog",
 			Posts: []engine.PostItem{
-				{Title: "Getting Started with YaaiCMS", Slug: "getting-started", Excerpt: "Learn how to set up your YaaiCMS CMS and create your first blog post.", FeaturedImageURL: "https://placehold.co/800x450/0f172a/e2e8f0?text=Post+1", FeaturedImageSrcset: "https://placehold.co/640x360/0f172a/e2e8f0?text=640w 640w, https://placehold.co/800x450/0f172a/e2e8f0?text=800w 800w", FeaturedImageAlt: "Getting started guide", PublishedAt: "February 25, 2026"},
-				{Title: "Building Modern Websites", Slug: "modern-websites", Excerpt: "Discover the latest techniques for building fast, responsive websites.", FeaturedImageURL: "https://placehold.co/800x450/1e3a5f/e2e8f0?text=Post+2", FeaturedImageSrcset: "https://placehold.co/640x360/1e3a5f/e2e8f0?text=640w 640w, https://placehold.co/800x450/1e3a5f/e2e8f0?text=800w 800w", FeaturedImageAlt: "Modern website design", PublishedAt: "February 24, 2026"},
-				{Title: "AI-Powered Content Creation", Slug: "ai-content", Excerpt: "How artificial intelligence is transforming the way we create web content.", FeaturedImageURL: "https://placehold.co/800x450/3b0764/e2e8f0?text=Post+3", FeaturedImageSrcset: "https://placehold.co/640x360/3b0764/e2e8f0?text=640w 640w, https://placehold.co/800x450/3b0764/e2e8f0?text=800w 800w", FeaturedImageAlt: "AI content creation", PublishedAt: "February 23, 2026"},
+				{Title: "Getting Started with YaaiCMS", Slug: "getting-started", Excerpt: "Learn how to set up your YaaiCMS CMS and create your first blog post.", FeaturedImageURL: "https://placehold.co/800x450/0f172a/e2e8f0?text=Post+1", FeaturedImageSrcset: "https://placehold.co/640x360/0f172a/e2e8f0?text=640w 640w, https://placehold.co/800x450/0f172a/e2e8f0?text=800w 800w", FeaturedImageAlt: "Getting started guide", PublishedAt: "February 25, 2026", AuthorName: "Jane Doe", AuthorAvatarURL: "https://placehold.co/40x40/4f46e5/ffffff?text=JD", AuthorSlug: "jane-doe"},
+				{Title: "Building Modern Websites", Slug: "modern-websites", Excerpt: "Discover the latest techniques for building fast, responsive websites.", FeaturedImageURL: "https://placehold.co/800x450/1e3a5f/e2e8f0?text=Post+2", FeaturedImageSrcset: "https://placehold.co/640x360/1e3a5f/e2e8f0?text=640w 640w, https://placehold.co/800x450/1e3a5f/e2e8f0?text=800w 800w", FeaturedImageAlt: "Modern website design", PublishedAt: "February 24, 2026", AuthorName: "John Smith", AuthorAvatarURL: "https://placehold.co/40x40/059669/ffffff?text=JS", AuthorSlug: "john-smith"},
+				{Title: "AI-Powered Content Creation", Slug: "ai-content", Excerpt: "How artificial intelligence is transforming the way we create web content.", FeaturedImageURL: "https://placehold.co/800x450/3b0764/e2e8f0?text=Post+3", FeaturedImageSrcset: "https://placehold.co/640x360/3b0764/e2e8f0?text=640w 640w, https://placehold.co/800x450/3b0764/e2e8f0?text=800w 800w", FeaturedImageAlt: "AI content creation", PublishedAt: "February 23, 2026", AuthorName: "Jane Doe", AuthorAvatarURL: "https://placehold.co/40x40/4f46e5/ffffff?text=JD", AuthorSlug: "jane-doe"},
 			},
 			Header: "<header class='bg-gray-800 text-white p-4'><nav class='max-w-6xl mx-auto flex justify-between items-center'><span class='text-xl font-bold'>YaaiCMS</span><div class='space-x-4'><a href='/' class='hover:text-gray-300'>Home</a><a href='/blog' class='hover:text-gray-300'>Blog</a></div></nav></header>",
 			Footer: "<footer class='bg-gray-800 text-gray-400 p-6 text-center text-sm'>&copy; 2026 YaaiCMS. All rights reserved.</footer>",

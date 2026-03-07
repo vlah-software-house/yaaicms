@@ -1,0 +1,187 @@
+{{/* Copyright (c) 2026 Madalin Gabriel Ignisca <hi@madalin.me> */}}
+{{/* Copyright (c) 2026 Vlah Software House SRL <contact@vlah.sh> */}}
+{{/* All rights reserved. See LICENSE for details. */}}
+{{define "title"}}Edit Profile{{end}}
+
+{{define "content"}}
+<div class="space-y-6">
+    <div>
+        <h2 class="text-xl font-semibold text-gray-900">Edit Profile</h2>
+        <p class="mt-1 text-sm text-gray-500">Update your public profile information. This data appears on author pages and post bylines.</p>
+    </div>
+
+    <form method="POST" action="/admin/profile"
+          hx-post="/admin/profile"
+          hx-target="#main-content"
+          class="bg-white rounded-lg shadow-sm border border-gray-200 divide-y divide-gray-200">
+
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+        <!-- Publish Toggle -->
+        <div class="p-6">
+            <label class="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" name="is_published" id="is_published"
+                       {{if and .Data.Profile .Data.Profile.IsPublished}}checked{{end}}
+                       class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                <div>
+                    <span class="text-sm font-medium text-gray-900">Publish author page</span>
+                    <p class="text-xs text-gray-500">When enabled, your profile is publicly visible at <code class="bg-gray-100 px-1 rounded">/author/{{if .Data.Profile}}{{.Data.Profile.Slug}}{{else}}your-name{{end}}</code> and your name links to it from post bylines.</p>
+                </div>
+            </label>
+        </div>
+
+        <!-- Identity -->
+        <div class="p-6 space-y-6">
+            <div>
+                <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">Identity</h3>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                    <label for="display_name" class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+                    <input type="text" id="display_name" name="display_name"
+                           value="{{.Data.DisplayName}}"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           required>
+                    <p class="mt-1 text-xs text-gray-400">Your public display name. Also used to generate your author URL slug.</p>
+                </div>
+
+                <div>
+                    <label for="job_title" class="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
+                    <input type="text" id="job_title" name="job_title"
+                           value="{{if .Data.Profile}}{{.Data.Profile.JobTitle}}{{end}}"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="e.g., Senior Developer">
+                </div>
+
+                <div>
+                    <label for="pronouns" class="block text-sm font-medium text-gray-700 mb-1">Pronouns</label>
+                    <input type="text" id="pronouns" name="pronouns"
+                           value="{{if .Data.Profile}}{{.Data.Profile.Pronouns}}{{end}}"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="e.g., they/them">
+                </div>
+
+                <div>
+                    <label for="location" class="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                    <input type="text" id="location" name="location"
+                           value="{{if .Data.Profile}}{{.Data.Profile.Location}}{{end}}"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="e.g., Berlin, Germany">
+                </div>
+            </div>
+        </div>
+
+        <!-- About -->
+        <div class="p-6 space-y-6">
+            <div>
+                <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">About</h3>
+            </div>
+
+            <div>
+                <label for="bio" class="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+                <textarea id="bio" name="bio" rows="4"
+                          class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                          placeholder="Tell readers about yourself...">{{if .Data.Profile}}{{.Data.Profile.Bio}}{{end}}</textarea>
+                <p class="mt-1 text-xs text-gray-400">A short biography displayed on your author page.</p>
+            </div>
+        </div>
+
+        <!-- Avatar -->
+        <div class="p-6 space-y-6">
+            <div>
+                <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">Avatar</h3>
+            </div>
+
+            <div class="flex items-start gap-4">
+                {{if and .Data.Profile .Data.Profile.AvatarURL}}
+                <img src="{{.Data.Profile.AvatarURL}}" alt="Current avatar"
+                     class="h-16 w-16 rounded-full object-cover border border-gray-200 flex-shrink-0">
+                {{else}}
+                <div class="h-16 w-16 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0">
+                    <span class="text-xl font-medium text-white">{{slice .Data.DisplayName 0 1}}</span>
+                </div>
+                {{end}}
+                <div class="flex-1">
+                    <label for="avatar_url" class="block text-sm font-medium text-gray-700 mb-1">Avatar URL</label>
+                    <input type="url" id="avatar_url" name="avatar_url"
+                           value="{{if .Data.Profile}}{{.Data.Profile.AvatarURL}}{{end}}"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="https://example.com/avatar.jpg">
+                    <p class="mt-1 text-xs text-gray-400">Direct URL to your avatar image. A media library picker will be added in a future release.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Links -->
+        <div class="p-6 space-y-6">
+            <div>
+                <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">Links</h3>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                    <label for="website" class="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                    <input type="url" id="website" name="website"
+                           value="{{if .Data.Profile}}{{.Data.Profile.Website}}{{end}}"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="https://yoursite.com">
+                </div>
+
+                <div>
+                    <label for="twitter" class="block text-sm font-medium text-gray-700 mb-1">Twitter / X</label>
+                    <input type="text" id="twitter" name="twitter"
+                           value="{{if .Data.Profile}}{{.Data.Profile.Twitter}}{{end}}"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="@username">
+                </div>
+
+                <div>
+                    <label for="github" class="block text-sm font-medium text-gray-700 mb-1">GitHub</label>
+                    <input type="text" id="github" name="github"
+                           value="{{if .Data.Profile}}{{.Data.Profile.GitHub}}{{end}}"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="username">
+                </div>
+
+                <div>
+                    <label for="linkedin" class="block text-sm font-medium text-gray-700 mb-1">LinkedIn</label>
+                    <input type="text" id="linkedin" name="linkedin"
+                           value="{{if .Data.Profile}}{{.Data.Profile.LinkedIn}}{{end}}"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="username or profile URL">
+                </div>
+
+                <div>
+                    <label for="instagram" class="block text-sm font-medium text-gray-700 mb-1">Instagram</label>
+                    <input type="text" id="instagram" name="instagram"
+                           value="{{if .Data.Profile}}{{.Data.Profile.Instagram}}{{end}}"
+                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                           placeholder="@username">
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit -->
+        <div class="p-6 flex justify-end">
+            <button type="submit"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md
+                           text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2
+                           focus:ring-offset-2 focus:ring-indigo-500 shadow-sm">
+                Save Profile
+            </button>
+        </div>
+    </form>
+</div>
+{{end}}

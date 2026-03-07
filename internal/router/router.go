@@ -86,6 +86,10 @@ func New(sessionStore *session.Store, admin *handlers.Admin, auth *handlers.Auth
 			r.Get("/", admin.Dashboard)
 			r.Get("/dashboard", admin.Dashboard)
 
+			// Profile (self-service, any authenticated user)
+			r.Get("/profile", admin.ProfilePage)
+			r.Post("/profile", admin.ProfileSave)
+
 			// Posts
 			r.Route("/posts", func(r chi.Router) {
 				r.Get("/", admin.PostsList)
@@ -230,6 +234,7 @@ func New(sessionStore *session.Store, admin *handlers.Admin, auth *handlers.Auth
 		r.Use(middleware.ResolveTenant(tenantStore, domainResolver, valkeyClient, baseDomain))
 		r.Use(middleware.CanonicalRedirect(domainResolver, valkeyClient, baseDomain))
 		r.Get("/", public.Homepage)
+		r.Get("/author/{slug}", public.AuthorPage)
 		r.Get("/{slug}", public.Page)
 	})
 
