@@ -44,6 +44,7 @@
                         <option value="footer" {{if and .Data.Item (eq (printf "%s" .Data.Item.Type) "footer")}}selected{{end}}>Footer</option>
                         <option value="page" {{if and .Data.Item (eq (printf "%s" .Data.Item.Type) "page")}}selected{{end}}>Page</option>
                         <option value="article_loop" {{if and .Data.Item (eq (printf "%s" .Data.Item.Type) "article_loop")}}selected{{end}}>Article Loop</option>
+                        <option value="author_page" {{if and .Data.Item (eq (printf "%s" .Data.Item.Type) "author_page")}}selected{{end}}>Author Page</option>
                     </select>
                     {{else}}
                     <input type="text" id="type-display" aria-label="Template type" disabled
@@ -90,6 +91,22 @@
                     <code>{{"{{"}} .FeaturedImageSrcset {{"}}"}}</code>,
                     <code>{{"{{"}} .FeaturedImageAlt {{"}}"}}</code>,
                     <code>{{"{{"}} .PublishedAt {{"}}"}}</code>
+                </p>
+                <p class="mt-1"><strong>Author page:</strong>
+                    <code>{{"{{"}} .Title {{"}}"}}</code>,
+                    <code>{{"{{"}} .Author.Name {{"}}"}}</code>,
+                    <code>{{"{{"}} .Author.Bio {{"}}"}}</code>,
+                    <code>{{"{{"}} .Author.AvatarURL {{"}}"}}</code>,
+                    <code>{{"{{"}} .Author.JobTitle {{"}}"}}</code>,
+                    <code>{{"{{"}} .Author.Website {{"}}"}}</code>,
+                    <code>{{"{{"}} .Author.Twitter {{"}}"}}</code>,
+                    <code>{{"{{"}} .Author.GitHub {{"}}"}}</code>,
+                    <code>{{"{{"}} .Author.LinkedIn {{"}}"}}</code>,
+                    <code>{{"{{"}} .Author.Instagram {{"}}"}}</code>,
+                    <code>{{"{{"}} .Header {{"}}"}}</code>,
+                    <code>{{"{{"}} .Footer {{"}}"}}</code>,
+                    <code>{{"{{"}} .Menus {{"}}"}}</code>,
+                    <code>{{"{{"}} range .Posts {{"}}"}}</code> (same post variables as article loop)
                 </p>
                 <p class="mt-1"><strong>Header / Footer:</strong>
                     <code>{{"{{"}} .SiteTitle {{"}}"}}</code>,

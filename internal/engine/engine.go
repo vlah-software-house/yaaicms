@@ -411,9 +411,13 @@ func (e *Engine) RenderAuthorPage(tenantID uuid.UUID, siteTitle, slogan string, 
 		footer = ""
 	}
 
-	loopTmpl, err := e.templateStore.FindActiveByType(tenantID, models.TemplateTypeArticleLoop)
-	if err != nil || loopTmpl == nil {
-		return nil, errors.New("no active article_loop template found")
+	// Prefer a dedicated author_page template; fall back to article_loop.
+	tmpl, err := e.templateStore.FindActiveByType(tenantID, models.TemplateTypeAuthorPage)
+	if err != nil || tmpl == nil {
+		tmpl, err = e.templateStore.FindActiveByType(tenantID, models.TemplateTypeArticleLoop)
+		if err != nil || tmpl == nil {
+			return nil, errors.New("no active author_page or article_loop template found")
+		}
 	}
 
 	data := AuthorPageData{
@@ -428,7 +432,7 @@ func (e *Engine) RenderAuthorPage(tenantID uuid.UUID, siteTitle, slogan string, 
 		Menus:     menus,
 	}
 
-	rendered, err := e.compileAndRender(loopTmpl.ID.String(), loopTmpl.Version, loopTmpl.HTMLContent, data)
+	rendered, err := e.compileAndRender(tmpl.ID.String(), tmpl.Version, tmpl.HTMLContent, data)
 	if err != nil {
 		return nil, err
 	}

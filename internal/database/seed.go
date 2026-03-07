@@ -151,7 +151,7 @@ func seedSiteSettings(db *sql.DB) error {
 
 // seedTemplates creates a minimal set of active templates for the default
 // tenant so the public site works immediately after setup.
-func seedTemplates(db *sql.DB) error {
+func seedTemplates(db *sql.DB) error { //nolint:funlen // template HTML literals make this inherently long
 	var count int
 	if err := db.QueryRow("SELECT COUNT(*) FROM templates WHERE tenant_id = $1", defaultTenantID).Scan(&count); err != nil {
 		return fmt.Errorf("check templates: %w", err)
@@ -232,6 +232,43 @@ func seedTemplates(db *sql.DB) error {
       </h2>
       {{ if .PublishedAt }}<time class="text-sm text-gray-500">{{ .PublishedAt }}</time>{{ end }}
       {{ if .Excerpt }}<p class="mt-2 text-gray-600">{{ .Excerpt }}</p>{{ end }}
+    </article>
+    {{ end }}
+  </main>
+  {{ .Footer }}
+</body>
+</html>`,
+		},
+		{
+			name:     "Default Author Page",
+			tmplType: "author_page",
+			html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ .Title }} — {{ .SiteTitle }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white text-gray-900 min-h-screen flex flex-col">
+  {{ .Header }}
+  <main class="flex-1 max-w-3xl mx-auto px-4 py-8 w-full">
+    <div class="flex items-center gap-6 mb-8">
+      {{ if .Author.AvatarURL }}<img src="{{ .Author.AvatarURL }}" alt="{{ .Author.Name }}" class="w-20 h-20 rounded-full object-cover">{{ end }}
+      <div>
+        <h1 class="text-3xl font-bold">{{ .Author.Name }}</h1>
+        {{ if .Author.JobTitle }}<p class="text-gray-500">{{ .Author.JobTitle }}</p>{{ end }}
+      </div>
+    </div>
+    {{ if .Author.Bio }}<p class="text-gray-700 mb-6">{{ .Author.Bio }}</p>{{ end }}
+    <h2 class="text-xl font-semibold mb-4">Posts</h2>
+    {{ range .Posts }}
+    <article class="mb-6 pb-6 border-b border-gray-200 last:border-0">
+      <h3 class="text-lg font-semibold">
+        <a href="/{{ .Slug }}" class="text-indigo-600 hover:text-indigo-800">{{ .Title }}</a>
+      </h3>
+      {{ if .PublishedAt }}<time class="text-sm text-gray-500">{{ .PublishedAt }}</time>{{ end }}
+      {{ if .Excerpt }}<p class="mt-1 text-gray-600">{{ .Excerpt }}</p>{{ end }}
     </article>
     {{ end }}
   </main>
