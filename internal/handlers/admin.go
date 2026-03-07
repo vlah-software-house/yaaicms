@@ -8,10 +8,13 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -23,6 +26,7 @@ import (
 	"yaaicms/internal/ai"
 	"yaaicms/internal/cache"
 	"yaaicms/internal/engine"
+	"yaaicms/internal/imaging"
 	"yaaicms/internal/middleware"
 	"yaaicms/internal/models"
 	"yaaicms/internal/render"
@@ -1572,6 +1576,107 @@ func (a *Admin) ProfileSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/admin/profile", http.StatusSeeOther)
+}
+
+// maxAvatarUpload is the maximum allowed avatar file size (5 MB).
+const maxAvatarUpload = 5 << 20
+
+// avatarImageTypes are MIME types accepted for avatar upload.
+var avatarImageTypes = map[string]bool{ //nolint:gochecknoglobals // constant lookup table
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/webp": true,
+}
+
+// AvatarUpload handles POST /admin/profile/avatar — accepts an image file,
+// crops it to a 512×512 square WebP, uploads to S3, and updates the profile.
+func (a *Admin) AvatarUpload(w http.ResponseWriter, r *http.Request) {
+	if a.storageClient == nil {
+		writeMediaError(w, "Object storage is not configured.", http.StatusServiceUnavailable)
+		return
+	}
+
+	sess := middleware.SessionFromCtx(r.Context())
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxAvatarUpload+1024)
+	err := r.ParseMultipartForm(maxAvatarUpload)
+	if err != nil {
+		writeMediaError(w, "File too large. Maximum size is 5 MB.", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	file, _, err := r.FormFile("avatar")
+	if err != nil {
+		writeMediaError(w, "No file provided.", http.StatusBadRequest)
+		return
+	}
+	defer func() { _ = file.Close() }()
+
+	// Detect content type by sniffing.
+	sniffBuf := make([]byte, 512)
+	n, err := file.Read(sniffBuf)
+	if err != nil && !errors.Is(err, io.EOF) {
+		writeMediaError(w, "Failed to read file.", http.StatusInternalServerError)
+		return
+	}
+	contentType := http.DetectContentType(sniffBuf[:n])
+
+	if !avatarImageTypes[contentType] {
+		writeMediaError(w, "Only JPEG, PNG, and WebP images are allowed.", http.StatusBadRequest)
+		return
+	}
+
+	// Seek back and read full file.
+	_, err = file.Seek(0, io.SeekStart)
+	if err != nil {
+		writeMediaError(w, "Failed to process file.", http.StatusInternalServerError)
+		return
+	}
+	raw, err := io.ReadAll(file)
+	if err != nil {
+		writeMediaError(w, "Failed to read file.", http.StatusInternalServerError)
+		return
+	}
+
+	// Crop and resize to 512×512 WebP.
+	processed, err := imaging.ProcessAvatar(raw)
+	if err != nil {
+		slog.Error("avatar processing failed", "error", err)
+		writeMediaError(w, "Failed to process image.", http.StatusInternalServerError)
+		return
+	}
+
+	// Upload to S3: avatars/{user_id}.webp (overwrites previous avatar).
+	s3Key := fmt.Sprintf("avatars/%s.webp", sess.UserID)
+	err = a.storageClient.Upload(r.Context(), a.storageClient.PublicBucket(), s3Key, "image/webp", bytes.NewReader(processed), int64(len(processed)))
+	if err != nil {
+		slog.Error("avatar s3 upload failed", "error", err, "key", s3Key)
+		writeMediaError(w, "Failed to upload avatar.", http.StatusInternalServerError)
+		return
+	}
+
+	// Update the profile's avatar_url.
+	avatarURL := a.storageClient.FileURL(s3Key)
+	err = a.userProfileStore.UpdateAvatarURL(sess.UserID, avatarURL)
+	if err != nil {
+		slog.Error("update avatar url failed", "error", err)
+		writeMediaError(w, "Failed to save avatar.", http.StatusInternalServerError)
+		return
+	}
+
+	// Invalidate page cache since avatar appears on public pages.
+	a.pageCache.InvalidateAll(r.Context())
+
+	slog.Info("avatar uploaded", "user_id", sess.UserID, "key", s3Key)
+
+	type avatarResp struct {
+		URL string `json:"url"`
+	}
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(avatarResp{URL: avatarURL})
+	if err != nil {
+		slog.Warn("avatar response encode failed", "error", err)
+	}
 }
 
 // --- Help ---

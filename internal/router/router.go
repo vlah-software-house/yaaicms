@@ -89,6 +89,7 @@ func New(sessionStore *session.Store, admin *handlers.Admin, auth *handlers.Auth
 			// Profile (self-service, any authenticated user)
 			r.Get("/profile", admin.ProfilePage)
 			r.Post("/profile", admin.ProfileSave)
+			r.Post("/profile/avatar", admin.AvatarUpload)
 
 			// Posts
 			r.Route("/posts", func(r chi.Router) {

@@ -93,31 +93,105 @@
         </div>
 
         <!-- Avatar -->
-        <div class="p-6 space-y-6">
+        <div class="p-6 space-y-6" x-data="avatarUpload()">
             <div>
                 <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">Avatar</h3>
             </div>
 
-            <div class="flex items-start gap-4">
-                {{if and .Data.Profile .Data.Profile.AvatarURL}}
-                <img src="{{.Data.Profile.AvatarURL}}" alt="Current avatar"
-                     class="h-16 w-16 rounded-full object-cover border border-gray-200 flex-shrink-0">
-                {{else}}
-                <div class="h-16 w-16 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0">
-                    <span class="text-xl font-medium text-white">{{slice .Data.DisplayName 0 1}}</span>
+            <div class="flex items-start gap-6">
+                <div class="flex-shrink-0">
+                    {{if and .Data.Profile .Data.Profile.AvatarURL}}
+                    <img x-ref="preview" src="{{.Data.Profile.AvatarURL}}" alt="Current avatar"
+                         class="h-24 w-24 rounded-full object-cover border-2 border-gray-200">
+                    {{else}}
+                    <div x-ref="placeholder" class="h-24 w-24 rounded-full bg-indigo-500 flex items-center justify-center">
+                        <span class="text-2xl font-medium text-white">{{slice .Data.DisplayName 0 1}}</span>
+                    </div>
+                    <img x-ref="preview" src="" alt="Avatar preview"
+                         class="h-24 w-24 rounded-full object-cover border-2 border-gray-200 hidden">
+                    {{end}}
                 </div>
-                {{end}}
-                <div class="flex-1">
-                    <label for="avatar_url" class="block text-sm font-medium text-gray-700 mb-1">Avatar URL</label>
-                    <input type="url" id="avatar_url" name="avatar_url"
-                           value="{{if .Data.Profile}}{{.Data.Profile.AvatarURL}}{{end}}"
-                           class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
-                                  focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                           placeholder="https://example.com/avatar.jpg">
-                    <p class="mt-1 text-xs text-gray-400">Direct URL to your avatar image. A media library picker will be added in a future release.</p>
+                <div class="flex-1 space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Profile photo</label>
+                        <p class="text-xs text-gray-400 mb-3">Upload a JPEG, PNG, or WebP image (max 5 MB). It will be cropped to a square and optimised automatically.</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <label class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md
+                                      text-gray-700 bg-white hover:bg-gray-50 cursor-pointer shadow-sm
+                                      focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                            <svg class="h-4 w-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <span x-text="uploading ? 'Uploading...' : 'Choose image'"></span>
+                            <input type="file" class="sr-only" accept="image/jpeg,image/png,image/webp"
+                                   @change="upload($event)" :disabled="uploading">
+                        </label>
+                        <span x-show="error" x-text="error" class="text-sm text-red-600" x-cloak></span>
+                        <span x-show="success" class="text-sm text-green-600" x-cloak>Avatar updated!</span>
+                    </div>
+
+                    <!-- Hidden field keeps avatar_url in sync for the main form -->
+                    <input type="hidden" name="avatar_url" :value="avatarUrl"
+                           value="{{if .Data.Profile}}{{.Data.Profile.AvatarURL}}{{end}}">
                 </div>
             </div>
         </div>
+
+        <script>
+        function avatarUpload() {
+            return {
+                uploading: false,
+                error: '',
+                success: false,
+                avatarUrl: '{{if .Data.Profile}}{{.Data.Profile.AvatarURL}}{{end}}',
+                async upload(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    this.error = '';
+                    this.success = false;
+
+                    if (file.size > 5 * 1024 * 1024) {
+                        this.error = 'File too large (max 5 MB).';
+                        event.target.value = '';
+                        return;
+                    }
+
+                    this.uploading = true;
+                    const form = new FormData();
+                    form.append('avatar', file);
+                    form.append('csrf_token', document.querySelector('input[name=csrf_token]').value);
+
+                    try {
+                        const resp = await fetch('/admin/profile/avatar', { method: 'POST', body: form });
+                        const data = await resp.json();
+                        if (!resp.ok) {
+                            this.error = data.error || 'Upload failed.';
+                            return;
+                        }
+                        this.avatarUrl = data.url;
+                        this.success = true;
+
+                        // Update preview image.
+                        const preview = this.$refs.preview;
+                        if (preview) {
+                            preview.src = data.url + '?t=' + Date.now();
+                            preview.classList.remove('hidden');
+                        }
+                        const placeholder = this.$refs.placeholder;
+                        if (placeholder) placeholder.classList.add('hidden');
+                    } catch (e) {
+                        this.error = 'Upload failed. Please try again.';
+                    } finally {
+                        this.uploading = false;
+                        event.target.value = '';
+                    }
+                }
+            };
+        }
+        </script>
 
         <!-- Links -->
         <div class="p-6 space-y-6">

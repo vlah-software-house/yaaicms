@@ -213,3 +213,19 @@ func (s *UserProfileStore) FindAuthorBySlug(slug string) (uuid.UUID, string, *mo
 	p.UserID = userID
 	return userID, displayName, &p, nil
 }
+
+// UpdateAvatarURL sets the avatar_url for a user profile. Creates the
+// profile row via UPSERT if it doesn't exist yet.
+func (s *UserProfileStore) UpdateAvatarURL(userID uuid.UUID, avatarURL string) error {
+	_, err := s.db.Exec(`
+		INSERT INTO user_profiles (user_id, avatar_url)
+		VALUES ($1, $2)
+		ON CONFLICT (user_id) DO UPDATE SET
+			avatar_url = EXCLUDED.avatar_url,
+			updated_at = NOW()
+	`, userID, avatarURL)
+	if err != nil {
+		return fmt.Errorf("update avatar url: %w", err)
+	}
+	return nil
+}

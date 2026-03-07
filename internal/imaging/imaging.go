@@ -124,3 +124,34 @@ func GenerateVariants(original []byte, variants []Variant) ([]ProcessedImage, er
 
 	return results, nil
 }
+
+// avatarSize is the square dimension for processed avatar images (512px
+// covers 3× Retina at typical 160px CSS display sizes).
+const avatarSize = 512
+
+// ProcessAvatar crops and resizes an image to a 512×512 square WebP
+// suitable for user avatars. Uses attention-based smart cropping to
+// keep faces and salient features centred.
+func ProcessAvatar(original []byte) ([]byte, error) {
+	img, err := vips.NewThumbnailFromBuffer(original, avatarSize, avatarSize, vips.InterestingAttention)
+	if err != nil {
+		return nil, fmt.Errorf("imaging: avatar thumbnail: %w", err)
+	}
+	defer img.Close()
+
+	err = img.AutoRotate()
+	if err != nil {
+		return nil, fmt.Errorf("imaging: avatar autorotate: %w", err)
+	}
+
+	params := vips.NewWebpExportParams()
+	params.Quality = 80
+	params.Lossless = false
+	params.StripMetadata = true
+
+	buf, _, err := img.ExportWebp(params)
+	if err != nil {
+		return nil, fmt.Errorf("imaging: avatar export: %w", err)
+	}
+	return buf, nil
+}
