@@ -150,6 +150,7 @@ type ListData struct {
 type AuthorPageData struct {
 	SiteTitle string
 	Slogan    string
+	Title     string // Page title — defaults to the author's display name.
 	Author    *TemplateAuthor
 	Posts     []PostItem
 	Header    template.HTML
@@ -418,6 +419,7 @@ func (e *Engine) RenderAuthorPage(tenantID uuid.UUID, siteTitle, slogan string, 
 	data := AuthorPageData{
 		SiteTitle: siteTitle,
 		Slogan:    slogan,
+		Title:     author.Name,
 		Author:    author,
 		Posts:     posts,
 		Header:    template.HTML(header), //nolint:gosec // G203: header is rendered from a trusted DB template, not user input.
