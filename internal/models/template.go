@@ -18,6 +18,7 @@ const (
 	TemplateTypeFooter      TemplateType = "footer"
 	TemplateTypePage        TemplateType = "page"
 	TemplateTypeArticleLoop TemplateType = "article_loop"
+	TemplateTypeAuthorPage  TemplateType = "author_page"
 )
 
 // Template represents an AI-generated HTML+TailwindCSS template stored in

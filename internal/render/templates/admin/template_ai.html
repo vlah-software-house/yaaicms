@@ -65,13 +65,13 @@
 
                 <!-- Preview content selector -->
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
-                     x-show="templateType === 'page' || templateType === 'article_loop'">
+                     x-show="templateType === 'page' || templateType === 'article_loop' || templateType === 'author_page'">
                     <label for="preview-content-select" class="block text-sm font-medium text-gray-700 mb-2">Preview Content</label>
                     <select id="preview-content-select" x-model="previewContentID" @change="if (generatedHTML) refreshPreview()"
                             class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
                                    focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
                         <option value="">Sample data (default)</option>
-                        <template x-if="templateType === 'article_loop'">
+                        <template x-if="templateType === 'article_loop' || templateType === 'author_page'">
                             <option value="__real__">Real published posts</option>
                         </template>
                         <template x-for="c in previewContent" :key="c.id">
@@ -388,7 +388,7 @@
             </div>
 
             <!-- Progress steps -->
-            <template x-if="restyleRunning || restyleResults.header || restyleResults.footer || restyleResults.page || restyleResults.article_loop || restyleErrors.header || restyleErrors.footer || restyleErrors.page || restyleErrors.article_loop">
+            <template x-if="restyleRunning || restyleResults.header || restyleResults.footer || restyleResults.page || restyleResults.article_loop || restyleResults.author_page || restyleErrors.header || restyleErrors.footer || restyleErrors.page || restyleErrors.article_loop || restyleErrors.author_page">
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                     <h3 class="text-sm font-medium text-gray-700 mb-3">Generation Progress</h3>
                     <div class="space-y-2">
@@ -492,6 +492,13 @@
                                     class="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors">
                                 Blog View
                             </button>
+                            <button type="button" @click="restylePreviewTab = 'author'"
+                                    :class="restylePreviewTab === 'author'
+                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                                    class="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors">
+                                Author View
+                            </button>
                         </div>
                         <button type="button" @click="refreshRestylePreview()"
                                 :disabled="restylePreviewLoading"
@@ -524,6 +531,18 @@
                                 </template>
                             </div>
                         </template>
+                        <template x-if="restylePreviewTab === 'author'">
+                            <div>
+                                <template x-if="restyleAuthorPreview">
+                                    <iframe :srcdoc="restyleAuthorPreview" sandbox="allow-scripts" class="w-full h-[600px] border-0"></iframe>
+                                </template>
+                                <template x-if="!restyleAuthorPreview">
+                                    <div class="flex items-center justify-center h-[400px] text-sm text-gray-400">
+                                        Click "Refresh Preview" to see the combined author page view.
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </template>
@@ -532,7 +551,7 @@
             <template x-if="hasAllRestyleResults()">
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4">
                     <h3 class="text-sm font-semibold text-gray-900">Save All Templates</h3>
-                    <p class="text-xs text-gray-500">Saves all 4 generated templates to the template library. You can then activate them from the templates list.</p>
+                    <p class="text-xs text-gray-500">Saves all 5 generated templates to the template library. You can then activate them from the templates list.</p>
 
                     <div>
                         <label for="restyle-save-prefix" class="block text-xs font-medium text-gray-700 mb-1">Name Prefix</label>
@@ -596,7 +615,8 @@ function aiTemplateBuilder() {
             { value: 'header', label: 'Header', help: 'Site header/navigation bar. Variables: {{"{{"}}.SiteName{{"}}"}}, {{"{{"}}.Year{{"}}"}}' },
             { value: 'footer', label: 'Footer', help: 'Site footer. Variables: {{"{{"}}.SiteName{{"}}"}}, {{"{{"}}.Year{{"}}"}}' },
             { value: 'page', label: 'Page', help: 'Full page layout with title, body, featured image, header/footer, and SEO metadata.' },
-            { value: 'article_loop', label: 'Article Loop', help: 'Post listing page with a grid/list of posts, each with title, excerpt, image, and date.' }
+            { value: 'article_loop', label: 'Article Loop', help: 'Post listing page with a grid/list of posts, each with title, excerpt, image, and date.' },
+            { value: 'author_page', label: 'Author Page', help: 'Author profile page with bio, avatar, social links, and a listing of their posts.' }
         ],
         previewContent: [],
         copied: false,
@@ -631,19 +651,21 @@ function aiTemplateBuilder() {
         restyleContentID: '',
         restyleRunning: false,
         restyleCurrentStep: '',
-        restyleResults: { header: '', footer: '', page: '', article_loop: '' },
-        restyleErrors: { header: '', footer: '', page: '', article_loop: '' },
+        restyleResults: { header: '', footer: '', page: '', article_loop: '', author_page: '' },
+        restyleErrors: { header: '', footer: '', page: '', article_loop: '', author_page: '' },
         restyleSteps: [
             { type: 'header', label: 'Header' },
             { type: 'footer', label: 'Footer' },
             { type: 'page', label: 'Page' },
-            { type: 'article_loop', label: 'Article Loop' }
+            { type: 'article_loop', label: 'Article Loop' },
+            { type: 'author_page', label: 'Author Page' }
         ],
         restyleViewTab: 'header',
         restylePreviewTab: 'page',
         restylePreviewLoading: false,
         restylePagePreview: '',
         restyleBlogPreview: '',
+        restyleAuthorPreview: '',
         restyleSavePrefix: '',
         restyleSaving: false,
         restyleSaveSuccess: false,
@@ -966,22 +988,25 @@ function aiTemplateBuilder() {
 
         hasAnyRestyleResult() {
             return this.restyleResults.header || this.restyleResults.footer ||
-                   this.restyleResults.page || this.restyleResults.article_loop;
+                   this.restyleResults.page || this.restyleResults.article_loop ||
+                   this.restyleResults.author_page;
         },
 
         hasAllRestyleResults() {
             return this.restyleResults.header && this.restyleResults.footer &&
-                   this.restyleResults.page && this.restyleResults.article_loop;
+                   this.restyleResults.page && this.restyleResults.article_loop &&
+                   this.restyleResults.author_page;
         },
 
         async restyleAll() {
             if (this.restyleRunning || !this.restylePrompt.trim()) return;
 
             this.restyleRunning = true;
-            this.restyleResults = { header: '', footer: '', page: '', article_loop: '' };
-            this.restyleErrors = { header: '', footer: '', page: '', article_loop: '' };
+            this.restyleResults = { header: '', footer: '', page: '', article_loop: '', author_page: '' };
+            this.restyleErrors = { header: '', footer: '', page: '', article_loop: '', author_page: '' };
             this.restylePagePreview = '';
             this.restyleBlogPreview = '';
+            this.restyleAuthorPreview = '';
             this.restyleSaveSuccess = false;
             this.restyleSaveError = '';
             this.restyleSavedIDs = [];
@@ -991,7 +1016,7 @@ function aiTemplateBuilder() {
 
             const csrf = this.csrfToken();
             const contentID = this.getEffectiveRestyleContentID();
-            const order = ['header', 'footer', 'page', 'article_loop'];
+            const order = ['header', 'footer', 'page', 'article_loop', 'author_page'];
 
             // Build context of previously generated templates to feed into each step.
             let context = {};
@@ -1056,7 +1081,7 @@ function aiTemplateBuilder() {
         async retryFromStep(fromType) {
             if (this.restyleRunning) return;
 
-            const order = ['header', 'footer', 'page', 'article_loop'];
+            const order = ['header', 'footer', 'page', 'article_loop', 'author_page'];
             const startIdx = order.indexOf(fromType);
             if (startIdx === -1) return;
 
@@ -1146,6 +1171,7 @@ function aiTemplateBuilder() {
                         footer_html: this.restyleResults.footer,
                         page_html: this.restyleResults.page,
                         article_loop_html: this.restyleResults.article_loop,
+                        author_page_html: this.restyleResults.author_page,
                         content_id: contentID
                     })
                 });
@@ -1156,6 +1182,7 @@ function aiTemplateBuilder() {
                 } else {
                     this.restylePagePreview = data.page_preview || '';
                     this.restyleBlogPreview = data.article_loop_preview || '';
+                    this.restyleAuthorPreview = data.author_page_preview || '';
                 }
             } catch (err) {
                 console.error('Restyle preview failed:', err);
@@ -1175,10 +1202,10 @@ function aiTemplateBuilder() {
 
             const csrf = this.csrfToken();
             const prefix = this.restyleSavePrefix.trim();
-            const typeLabels = { header: 'Header', footer: 'Footer', page: 'Page', article_loop: 'Article Loop' };
+            const typeLabels = { header: 'Header', footer: 'Footer', page: 'Page', article_loop: 'Article Loop', author_page: 'Author Page' };
 
             try {
-                for (const tmplType of ['header', 'footer', 'page', 'article_loop']) {
+                for (const tmplType of ['header', 'footer', 'page', 'article_loop', 'author_page']) {
                     const formData = new FormData();
                     formData.append('name', prefix + ' \u2014 ' + typeLabels[tmplType]);
                     formData.append('type', tmplType);

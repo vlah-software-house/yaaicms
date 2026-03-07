@@ -18,6 +18,7 @@ func TestTemplateTypeConstants(t *testing.T) {
 		{name: "footer", tt: TemplateTypeFooter, expected: "footer"},
 		{name: "page", tt: TemplateTypePage, expected: "page"},
 		{name: "article_loop", tt: TemplateTypeArticleLoop, expected: "article_loop"},
+		{name: "author_page", tt: TemplateTypeAuthorPage, expected: "author_page"},
 	}
 
 	for _, tc := range tests {
@@ -36,6 +37,7 @@ func TestTemplateTypeDistinct(t *testing.T) {
 		TemplateTypeFooter,
 		TemplateTypePage,
 		TemplateTypeArticleLoop,
+		TemplateTypeAuthorPage,
 	}
 
 	seen := make(map[TemplateType]bool)
@@ -57,6 +59,7 @@ func TestTemplateTypeNonEmpty(t *testing.T) {
 		{name: "Footer", tt: TemplateTypeFooter},
 		{name: "Page", tt: TemplateTypePage},
 		{name: "ArticleLoop", tt: TemplateTypeArticleLoop},
+		{name: "AuthorPage", tt: TemplateTypeAuthorPage},
 	}
 
 	for _, tc := range types {
