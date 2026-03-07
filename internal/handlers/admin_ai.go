@@ -1268,23 +1268,7 @@ func (a *Admin) AIRestylePreview(w http.ResponseWriter, r *http.Request) {
 
 	// Render author page preview with the generated header/footer.
 	if req.AuthorPageHTML != "" {
-		var authorData any
-		authorData = a.buildRealPreviewData(sess.TenantID, "author_page", "")
-		if authorData == nil {
-			authorData = buildPreviewData("author_page")
-		}
-
-		// Inject the rendered header/footer.
-		if ad, ok := authorData.(engine.AuthorPageData); ok {
-			if renderedHeader != "" {
-				ad.Header = template.HTML(renderedHeader)
-			}
-			if renderedFooter != "" {
-				ad.Footer = template.HTML(renderedFooter)
-			}
-			authorData = ad
-		}
-
+		authorData := a.buildRealAuthorPagePreviewData(sess.TenantID, renderedHeader, renderedFooter)
 		result, err := a.engine.ValidateAndRender(req.AuthorPageHTML, authorData)
 		if err == nil {
 			resp.AuthorPagePreview = string(wrapPreviewHTML(result))
@@ -1382,7 +1366,7 @@ func (a *Admin) buildRealPreviewData(tenantID uuid.UUID, tmplType string, conten
 		return a.buildRealPagePreview(tenantID, contentID)
 	case "article_loop":
 		return a.buildRealArticleLoopPreview(tenantID)
-	case "author_page":
+	case string(models.TemplateTypeAuthorPage):
 		return a.buildRealAuthorPagePreview(tenantID)
 	default:
 		// Header/footer don't use content data.
@@ -1606,19 +1590,19 @@ func (a *Admin) buildRealAuthorPagePreview(tenantID uuid.UUID) any {
 
 	// Filter posts by this author.
 	var authorPosts []engine.PostItem
-	for _, p := range posts {
-		if p.AuthorID != authorID {
+	for i := range posts {
+		if posts[i].AuthorID != authorID {
 			continue
 		}
 		item := engine.PostItem{
-			Title: p.Title,
-			Slug:  p.Slug,
+			Title: posts[i].Title,
+			Slug:  posts[i].Slug,
 		}
-		if p.Excerpt != nil {
-			item.Excerpt = *p.Excerpt
+		if posts[i].Excerpt != nil {
+			item.Excerpt = *posts[i].Excerpt
 		}
-		if p.PublishedAt != nil {
-			item.PublishedAt = p.PublishedAt.Format("January 2, 2006")
+		if posts[i].PublishedAt != nil {
+			item.PublishedAt = posts[i].PublishedAt.Format("January 2, 2006")
 		}
 		item.AuthorName = displayName
 		if profile != nil {
@@ -1638,6 +1622,29 @@ func (a *Admin) buildRealAuthorPagePreview(tenantID uuid.UUID) any {
 		Footer:    "<footer class='bg-gray-800 text-gray-400 p-6 text-center text-sm'>&copy; 2026 YaaiCMS. All rights reserved.</footer>",
 		Year:      time.Now().Year(),
 	}
+}
+
+// buildRealAuthorPagePreviewData assembles AuthorPageData for restyle preview,
+// injecting pre-rendered header/footer HTML. Falls back to sample data if no
+// real author data is available.
+func (a *Admin) buildRealAuthorPagePreviewData(tenantID uuid.UUID, renderedHeader, renderedFooter string) any {
+	var data any
+	data = a.buildRealPreviewData(tenantID, string(models.TemplateTypeAuthorPage), "")
+	if data == nil {
+		data = buildPreviewData(string(models.TemplateTypeAuthorPage))
+	}
+
+	if ad, ok := data.(engine.AuthorPageData); ok {
+		if renderedHeader != "" {
+			ad.Header = template.HTML(renderedHeader) //nolint:gosec // admin-only preview from AI-generated templates
+		}
+		if renderedFooter != "" {
+			ad.Footer = template.HTML(renderedFooter) //nolint:gosec // admin-only preview from AI-generated templates
+		}
+		return ad
+	}
+
+	return data
 }
 
 // buildSrcsetForPreview constructs a srcset string from media variants,
@@ -1965,7 +1972,7 @@ DESIGN GUIDELINES:
 - Include the page title as an <h1> above the post grid.
 - Consider adding visual interest when no featured image exists (colored placeholder, icon, etc.).`
 
-	case "author_page":
+	case string(models.TemplateTypeAuthorPage):
 		vars = `
 
 TEMPLATE TYPE: Author Page (author profile with their posts)
@@ -2103,7 +2110,7 @@ func buildPreviewData(tmplType string) any {
 				"footer_legal": {{Label: "Privacy", URL: "/privacy"}, {Label: "Terms", URL: "/terms"}},
 			},
 		}
-	case "author_page":
+	case string(models.TemplateTypeAuthorPage):
 		return engine.AuthorPageData{
 			SiteTitle: "YaaiCMS",
 			Slogan:    "Your AI-powered CMS",
