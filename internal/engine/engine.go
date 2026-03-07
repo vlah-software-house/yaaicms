@@ -261,6 +261,7 @@ func (e *Engine) RenderPage(tenantID uuid.UUID, siteTitle, slogan string, conten
 	}
 
 	result := injectContentCSS(rendered)
+	result = injectAlpineJS(result)
 
 	// Inject social/SEO meta tags before </head> when social context is provided.
 	if social != nil {
@@ -336,7 +337,9 @@ func (e *Engine) RenderPostList(tenantID uuid.UUID, siteTitle, slogan string, po
 		return nil, err
 	}
 
-	return injectContentCSS(rendered), nil
+	result := injectContentCSS(rendered)
+	result = injectAlpineJS(result)
+	return result, nil
 }
 
 // ValidateTemplate attempts to compile a template string and returns an
@@ -412,6 +415,23 @@ func injectContentCSS(rendered []byte) []byte {
 	}
 	// No </head> — prepend the style block.
 	return []byte(contentStyleTag + htmlContent)
+}
+
+// alpineJSTag is the CDN script tag for AlpineJS, used by header templates
+// for interactive components like mobile menu toggles and dropdowns.
+const alpineJSTag = `<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>`
+
+// injectAlpineJS ensures the rendered HTML includes the AlpineJS CDN script.
+// Skips injection if Alpine is already present (e.g., template included it).
+func injectAlpineJS(rendered []byte) []byte {
+	s := string(rendered)
+	if strings.Contains(strings.ToLower(s), "alpinejs") {
+		return rendered
+	}
+	if idx := strings.Index(strings.ToLower(s), "</head>"); idx != -1 {
+		return []byte(s[:idx] + alpineJSTag + "\n" + s[idx:])
+	}
+	return rendered
 }
 
 // injectSocialMeta inserts Open Graph, Twitter Card, and standard SEO meta
