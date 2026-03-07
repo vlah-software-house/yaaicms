@@ -1410,6 +1410,61 @@ func (a *Admin) UserCreate(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
 
+// UserDelete handles DELETE /admin/users/{id} — permanently removes a user.
+// Only super admins can delete users. Prevents self-deletion.
+// Cleans up the user's S3 avatar and invalidates the page cache.
+func (a *Admin) UserDelete(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+
+	targetID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	if targetID == sess.UserID {
+		http.Error(w, "Cannot delete yourself", http.StatusForbidden)
+		return
+	}
+
+	// Read the avatar URL before deletion — CASCADE will remove the profile row.
+	var avatarS3Key string
+	if a.storageClient != nil {
+		profile, _ := a.userProfileStore.FindByUserID(targetID)
+		if profile != nil && profile.AvatarURL != "" {
+			if key, ok := a.storageClient.ExtractS3Key(profile.AvatarURL); ok {
+				avatarS3Key = key
+			}
+		}
+	}
+
+	err = a.userStore.Delete(targetID)
+	if err != nil {
+		slog.Error("delete user failed", "error", err, "target", targetID) //nolint:gosec // G706: targetID is a parsed UUID, not tainted user input.
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Clean up S3 avatar (best-effort).
+	if avatarS3Key != "" {
+		delErr := a.storageClient.Delete(r.Context(), a.storageClient.PublicBucket(), avatarS3Key)
+		if delErr != nil {
+			slog.Warn("avatar s3 cleanup failed", "error", delErr, "key", avatarS3Key) //nolint:gosec // G706: avatarS3Key is derived from DB, not user input.
+		}
+	}
+
+	a.pageCache.InvalidateAll(r.Context())
+
+	slog.Info("user deleted", "admin", sess.Email, "target_user", targetID) //nolint:gosec // G706: sess.Email is from the authenticated session, not tainted.
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Redirect", "/admin/users")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
 // --- Cache invalidation helpers ---
 
 // invalidateContentCache purges the L2 page cache for a content item and

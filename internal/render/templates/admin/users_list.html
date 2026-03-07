@@ -66,16 +66,20 @@
                         <span class="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">Pending setup</span>
                         {{end}}
                     </td>
-                    <td class="px-6 py-4 text-right text-sm">
+                    <td class="px-6 py-4 text-right text-sm space-x-3">
                         {{if .User.TOTPEnabled}}
                         <form method="POST" action="/admin/users/{{.User.ID}}/reset-2fa" class="inline"
                               hx-post="/admin/users/{{.User.ID}}/reset-2fa"
                               hx-target="#main-content"
                               hx-confirm="This will force the user to set up 2FA again on their next login. Continue?">
-                            <button type="submit" class="text-red-600 hover:text-red-800">Reset 2FA</button>
+                            <button type="submit" class="text-amber-600 hover:text-amber-800">Reset 2FA</button>
                         </form>
-                        {{else}}
-                        <span class="text-gray-400">—</span>
+                        {{end}}
+                        {{if and $.Session.IsSuperAdmin (ne .User.ID $.Session.UserID)}}
+                        <button class="text-red-600 hover:text-red-800"
+                                hx-delete="/admin/users/{{.User.ID}}"
+                                hx-target="#main-content"
+                                hx-confirm="Permanently delete {{.User.DisplayName}} ({{.User.Email}})? This cannot be undone.">Delete</button>
                         {{end}}
                     </td>
                 </tr>

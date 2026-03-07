@@ -169,6 +169,7 @@ func New(sessionStore *session.Store, admin *handlers.Admin, auth *handlers.Auth
 				r.Get("/new", admin.UserNew)
 				r.Post("/", admin.UserCreate)
 				r.Post("/{id}/reset-2fa", admin.UserResetTwoFA)
+				r.With(middleware.RequireSuperAdmin).Delete("/{id}", admin.UserDelete)
 			})
 
 			// AI Assistant (content editor helpers + template builder)
