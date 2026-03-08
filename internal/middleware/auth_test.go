@@ -204,7 +204,7 @@ func TestRequireAuth(t *testing.T) {
 		inner, called := okHandler()
 		handler := RequireAuth(inner)
 
-		req := httptest.NewRequest(http.MethodGet, "/admin/dashboard", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/dashboard", http.NoBody)
 		req.Header.Set("HX-Request", "true")
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -301,7 +301,7 @@ func TestRequire2FA(t *testing.T) {
 		inner, called := okHandler()
 		handler := Require2FA(inner)
 
-		req := httptest.NewRequest(http.MethodGet, "/admin/dashboard", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/dashboard", http.NoBody)
 		req.Header.Set("HX-Request", "true")
 		req = req.WithContext(ctxWithSession(req.Context(), newTestSession("admin", false)))
 		rr := httptest.NewRecorder()
