@@ -896,7 +896,10 @@ func (a *Admin) TemplatesList(w http.ResponseWriter, r *http.Request) {
 // TemplateNew renders the new template form.
 func (a *Admin) TemplateNew(w http.ResponseWriter, r *http.Request) {
 	sess := middleware.SessionFromCtx(r.Context())
-	prefixes, _ := a.templateStore.ListDistinctPrefixes(sess.TenantID)
+	prefixes, err := a.templateStore.ListDistinctPrefixes(sess.TenantID)
+	if err != nil {
+		slog.Error("list distinct prefixes failed", "error", err)
+	}
 
 	a.renderer.Page(w, r, "template_form", &render.PageData{
 		Title:   "New Template",
@@ -999,7 +1002,10 @@ func (a *Admin) TemplateEdit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	prefixes, _ := a.templateStore.ListDistinctPrefixes(sess.TenantID)
+	prefixes, prefixErr := a.templateStore.ListDistinctPrefixes(sess.TenantID)
+	if prefixErr != nil {
+		slog.Error("list distinct prefixes failed", "error", prefixErr)
+	}
 
 	// Only set currentGroup if the name actually has a separator.
 	// If prefix equals full name, there's no group — it's a standalone template.
