@@ -29,7 +29,7 @@ func newOpenAI(cfg ProviderConfig) *openAIProvider {
 	}
 	return &openAIProvider{
 		config: cfg,
-		client: &http.Client{Timeout: 60 * time.Second},
+		client: &http.Client{Timeout: 120 * time.Second},
 	}
 }
 
@@ -53,8 +53,9 @@ func (p *openAIProvider) GenerateWithModel(ctx context.Context, model, systemPro
 	}
 
 	body := openAIRequest{
-		Model:    model,
-		Messages: messages,
+		Model:     model,
+		Messages:  messages,
+		MaxTokens: 16384,
 	}
 
 	return p.doChat(ctx, body)
@@ -99,6 +100,11 @@ func (p *openAIProvider) doChat(ctx context.Context, body openAIRequest) (string
 
 	if len(result.Choices) == 0 {
 		return "", fmt.Errorf("openai: no choices returned")
+	}
+
+	// Detect output truncation: "length" means the model hit the token limit.
+	if result.Choices[0].FinishReason == "length" {
+		return "", fmt.Errorf("%w: openai response was truncated (output exceeded token limit)", ErrOutputTruncated)
 	}
 
 	return result.Choices[0].Message.Content, nil
@@ -179,8 +185,9 @@ type openAIMessage struct {
 }
 
 type openAIRequest struct {
-	Model    string          `json:"model"`
-	Messages []openAIMessage `json:"messages"`
+	Model     string          `json:"model"`
+	Messages  []openAIMessage `json:"messages"`
+	MaxTokens int             `json:"max_tokens,omitempty"`
 }
 
 type openAIResponse struct {
@@ -188,7 +195,8 @@ type openAIResponse struct {
 }
 
 type openAIChoice struct {
-	Message openAIMessage `json:"message"`
+	Message      openAIMessage `json:"message"`
+	FinishReason string        `json:"finish_reason"`
 }
 
 // --- OpenAI image generation types ---

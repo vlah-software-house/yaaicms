@@ -7,6 +7,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"html/template"
@@ -900,8 +901,12 @@ func (a *Admin) AITemplateGenerate(w http.ResponseWriter, r *http.Request) {
 	result, err := a.aiRegistry.GenerateForTaskAs(r.Context(), a.tenantAIProvider(r), ai.TaskTemplate, systemPrompt, userPrompt.String())
 	if err != nil {
 		slog.Error("ai template generate failed", "error", err)
+		errMsg := "AI request failed. Check your provider configuration."
+		if errors.Is(err, ai.ErrOutputTruncated) {
+			errMsg = "The generated template was too large and got cut off. Try a simpler prompt or generate the template in smaller steps."
+		}
 		writeJSON(w, http.StatusOK, templateGenResponse{
-			Error: "AI request failed. Check your provider configuration.",
+			Error: errMsg,
 		})
 		return
 	}

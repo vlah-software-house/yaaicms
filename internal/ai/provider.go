@@ -9,9 +9,15 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 )
+
+// ErrOutputTruncated is returned when the AI provider's response was cut short
+// because it exceeded the maximum output token limit. Callers can check for
+// this with errors.Is to show a user-friendly message.
+var ErrOutputTruncated = errors.New("ai output truncated")
 
 // Provider defines the interface that all AI providers must implement.
 // Each provider handles its own HTTP communication and response parsing.

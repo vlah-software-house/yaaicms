@@ -7,6 +7,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -46,6 +47,7 @@ func claudeSuccessBody(text string) []byte {
 		Content: []claudeContentBlock{
 			{Type: "text", Text: text},
 		},
+		StopReason: "end_turn",
 	}
 	b, _ := json.Marshal(resp)
 	return b
@@ -312,8 +314,8 @@ func TestClaudeGenerate_VerifiesRequestHeaders(t *testing.T) {
 	if reqBody.Model != "claude-sonnet-4-6" {
 		t.Errorf("request model: got %q, want %q", reqBody.Model, "claude-sonnet-4-6")
 	}
-	if reqBody.MaxTokens != 4096 {
-		t.Errorf("max_tokens: got %d, want %d", reqBody.MaxTokens, 4096)
+	if reqBody.MaxTokens != 16384 {
+		t.Errorf("max_tokens: got %d, want %d", reqBody.MaxTokens, 16384)
 	}
 	if reqBody.System != "system prompt" {
 		t.Errorf("system: got %q, want %q", reqBody.System, "system prompt")
@@ -387,6 +389,31 @@ func TestClaudeGenerate_NoTextContent(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no text content") {
 		t.Errorf("error should mention no text content: got %q", err.Error())
+	}
+}
+
+func TestClaudeGenerate_Truncated(t *testing.T) {
+	// Simulate a response that was cut off due to max_tokens.
+	resp := claudeResponse{
+		Content:    []claudeContentBlock{{Type: "text", Text: "<div>incomplete"}},
+		StopReason: "max_tokens",
+	}
+	body, _ := json.Marshal(resp)
+	srv := newTestServer(t, http.StatusOK, body)
+	defer srv.Close()
+
+	p := newClaude(ProviderConfig{
+		APIKey:  "test-key",
+		Model:   "claude-sonnet-4-6",
+		BaseURL: srv.URL,
+	})
+
+	_, err := p.Generate(context.Background(), "sys", "usr")
+	if err == nil {
+		t.Fatal("expected error for truncated response, got nil")
+	}
+	if !errors.Is(err, ErrOutputTruncated) {
+		t.Errorf("error should wrap ErrOutputTruncated: got %q", err.Error())
 	}
 }
 

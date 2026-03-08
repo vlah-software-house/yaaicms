@@ -28,7 +28,7 @@ func newClaude(cfg ProviderConfig) *claudeProvider {
 	}
 	return &claudeProvider{
 		config: cfg,
-		client: &http.Client{Timeout: 60 * time.Second},
+		client: &http.Client{Timeout: 120 * time.Second},
 	}
 }
 
@@ -47,7 +47,7 @@ func (p *claudeProvider) GenerateWithModel(ctx context.Context, model, systemPro
 	}
 	body := claudeRequest{
 		Model:     model,
-		MaxTokens: 4096,
+		MaxTokens: 16384,
 		System:    systemPrompt,
 		Messages: []claudeMessage{
 			{Role: "user", Content: userPrompt},
@@ -89,6 +89,12 @@ func (p *claudeProvider) GenerateWithModel(ctx context.Context, model, systemPro
 		return "", fmt.Errorf("claude unmarshal: %w", err)
 	}
 
+	// Detect output truncation: if stop_reason is "max_tokens", the model
+	// ran out of output space and the response is incomplete.
+	if result.StopReason == "max_tokens" {
+		return "", fmt.Errorf("%w: claude response was truncated (output exceeded token limit)", ErrOutputTruncated)
+	}
+
 	// Extract text from the first content block.
 	for _, block := range result.Content {
 		if block.Type == "text" {
@@ -119,5 +125,6 @@ type claudeContentBlock struct {
 }
 
 type claudeResponse struct {
-	Content []claudeContentBlock `json:"content"`
+	Content    []claudeContentBlock `json:"content"`
+	StopReason string               `json:"stop_reason"`
 }
