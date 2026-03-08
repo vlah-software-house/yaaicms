@@ -21,19 +21,49 @@
           hx-target="#main-content"
           class="space-y-6">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <!-- Hidden input sends the effective group value to the server -->
+        <input type="hidden" name="group" :value="effectiveGroup()">
 
-        <!-- Name and Type -->
+        <!-- Group, Name, and Type -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <!-- Group (theme prefix) -->
                 <div>
+                    <label for="group-select" class="block text-sm font-medium text-gray-700">Group</label>
+                    <div class="mt-1">
+                        <select id="group-select" x-model="selectedGroup"
+                                class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                       focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+                            <option value="">No group</option>
+                            {{range .Data.Prefixes}}
+                            <option value="{{.}}">{{.}}</option>
+                            {{end}}
+                            <option value="__new__">+ New group...</option>
+                        </select>
+                        <template x-if="selectedGroup === '__new__'">
+                            <input type="text" x-model="newGroupName"
+                                   class="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                          placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                   placeholder="e.g., Modern Blog">
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Name (fallback if no group selected) -->
+                <div x-show="effectiveGroup() === ''">
                     <label for="name" class="block text-sm font-medium text-gray-700">Template Name</label>
-                    <input type="text" id="name" name="name" required
-                           value="{{if .Data.Item}}{{.Data.Item.Name}}{{end}}"
+                    <input type="text" id="name" name="name" x-model="manualName"
                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
                                   placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
                            placeholder="e.g., Default Page Layout">
                 </div>
+                <div x-show="effectiveGroup() !== ''">
+                    <label class="block text-sm font-medium text-gray-700">Composed Name</label>
+                    <p class="mt-1 px-3 py-2 text-sm text-gray-600 bg-gray-50 rounded-md border border-gray-200"
+                       x-text="composedName()"></p>
+                </div>
 
+                <!-- Type -->
                 <div>
                     <label for="type" class="block text-sm font-medium text-gray-700">Type</label>
                     {{if .Data.IsNew}}
@@ -344,6 +374,9 @@
 function templateEditor() {
     return {
         templateType: '{{if and .Data.Item}}{{printf "%s" .Data.Item.Type}}{{else}}page{{end}}',
+        selectedGroup: '{{if .Data.CurrentGroup}}{{.Data.CurrentGroup}}{{end}}',
+        newGroupName: '',
+        manualName: '{{if and .Data.Item (not .Data.CurrentGroup)}}{{.Data.Item.Name}}{{end}}',
         aiOpen: false,
         aiPrompt: '',
         aiMessages: [],
@@ -358,6 +391,20 @@ function templateEditor() {
         init() {
             this.loadPreviewContent();
             this.$nextTick(() => this.initAceEditor());
+        },
+
+        // Returns the effective group name (from dropdown or new input).
+        effectiveGroup() {
+            if (this.selectedGroup === '__new__') return this.newGroupName.trim();
+            return this.selectedGroup;
+        },
+
+        // Composes the full template name from group + type.
+        composedName() {
+            const group = this.effectiveGroup();
+            if (!group) return this.manualName;
+            const typeLabels = { header: 'Header', footer: 'Footer', page: 'Page', article_loop: 'Article Loop', author_page: 'Author Page' };
+            return group + ' \u2014 ' + (typeLabels[this.templateType] || this.templateType);
         },
 
         initAceEditor() {

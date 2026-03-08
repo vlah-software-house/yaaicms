@@ -204,12 +204,37 @@
                     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4">
                         <h3 class="text-sm font-semibold text-gray-900">Save as Template</h3>
 
-                        <div>
-                            <label for="save-template-name" class="block text-xs font-medium text-gray-700 mb-1">Template Name</label>
-                            <input id="save-template-name" type="text" x-model="saveName"
-                                   class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
-                                          placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                                   placeholder="e.g., Modern Blog Page">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label for="save-group" class="block text-xs font-medium text-gray-700 mb-1">Group</label>
+                                <select id="save-group" x-model="saveGroup"
+                                        class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                               focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+                                    <option value="">No group</option>
+                                    <template x-for="g in groupOptions" :key="g">
+                                        <option :value="g" x-text="g"></option>
+                                    </template>
+                                    <option value="__new__">+ New group...</option>
+                                </select>
+                                <template x-if="saveGroup === '__new__'">
+                                    <input type="text" x-model="saveNewGroupName"
+                                           class="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                                  placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                           placeholder="e.g., Modern Blog">
+                                </template>
+                            </div>
+                            <div x-show="!saveEffectiveGroup()">
+                                <label for="save-template-name" class="block text-xs font-medium text-gray-700 mb-1">Template Name</label>
+                                <input id="save-template-name" type="text" x-model="saveName"
+                                       class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm
+                                              placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                       placeholder="e.g., Modern Blog Page">
+                            </div>
+                            <div x-show="saveEffectiveGroup()">
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Composed Name</label>
+                                <p class="px-3 py-2 text-sm text-gray-600 bg-gray-50 rounded-md border border-gray-200"
+                                   x-text="saveComposedName()"></p>
+                            </div>
                         </div>
 
                         <div>
@@ -217,7 +242,8 @@
                             <p class="text-sm text-gray-600" x-text="templateTypes.find(t => t.value === templateType)?.label"></p>
                         </div>
 
-                        <button type="button" @click="saveTemplate()" :disabled="!saveName.trim() || saving"
+                        <button type="button" @click="saveTemplate()"
+                                :disabled="(!saveName.trim() && !saveEffectiveGroup()) || saving"
                                 class="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500
                                        transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             <span x-text="saving ? 'Saving...' : 'Save Template'"></span>
@@ -631,6 +657,9 @@ function aiTemplateBuilder() {
         validationError: '',
         previewHTML: '',
         saveName: '',
+        saveGroup: '',
+        saveNewGroupName: '',
+        groupOptions: [],
         saving: false,
         saveSuccess: false,
         saveError: '',
@@ -678,6 +707,7 @@ function aiTemplateBuilder() {
         init() {
             this.loadPreviewContent();
             this.loadThemes();
+            this.loadPrefixes();
         },
 
         // ── CSRF helper ──
@@ -686,6 +716,29 @@ function aiTemplateBuilder() {
             if (!el) return '';
             try { return JSON.parse(el.getAttribute('hx-headers'))['X-CSRF-Token']; }
             catch { return ''; }
+        },
+
+        // ── Group prefixes ──
+        async loadPrefixes() {
+            try {
+                const resp = await fetch('/admin/templates/prefixes');
+                this.groupOptions = await resp.json();
+            } catch (err) {
+                console.warn('Failed to load prefixes:', err);
+                this.groupOptions = [];
+            }
+        },
+
+        saveEffectiveGroup() {
+            if (this.saveGroup === '__new__') return this.saveNewGroupName.trim();
+            return this.saveGroup;
+        },
+
+        saveComposedName() {
+            const group = this.saveEffectiveGroup();
+            if (!group) return this.saveName;
+            const typeLabels = { header: 'Header', footer: 'Footer', page: 'Page', article_loop: 'Article Loop', author_page: 'Author Page' };
+            return group + ' \u2014 ' + (typeLabels[this.templateType] || this.templateType);
         },
 
         // ── Preview content ──
@@ -945,7 +998,9 @@ function aiTemplateBuilder() {
         },
 
         async saveTemplate() {
-            if (!this.saveName.trim() || !this.generatedHTML || this.saving) return;
+            const group = this.saveEffectiveGroup();
+            const name = group ? this.saveComposedName() : this.saveName.trim();
+            if (!name || !this.generatedHTML || this.saving) return;
             this.saving = true;
             this.saveSuccess = false;
             this.saveError = '';
@@ -953,7 +1008,11 @@ function aiTemplateBuilder() {
             try {
                 const csrf = this.csrfToken();
                 const formData = new FormData();
-                formData.append('name', this.saveName);
+                if (group) {
+                    formData.append('group', group);
+                } else {
+                    formData.append('name', name);
+                }
                 formData.append('type', this.templateType);
                 formData.append('html_content', this.generatedHTML);
                 formData.append('csrf_token', csrf);
@@ -970,6 +1029,10 @@ function aiTemplateBuilder() {
                 } else {
                     this.saveSuccess = true;
                     this.saveName = '';
+                    this.saveGroup = '';
+                    this.saveNewGroupName = '';
+                    // Reload prefixes so the new group appears in dropdowns
+                    this.loadPrefixes();
                 }
             } catch (err) {
                 this.saveError = 'Network error: ' + err.message;

@@ -954,9 +954,15 @@ func (a *Admin) AITemplateGenerate(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) AITemplateSave(w http.ResponseWriter, r *http.Request) {
 	sess := middleware.SessionFromCtx(r.Context())
 
-	name := r.FormValue("name")
 	tmplType := models.TemplateType(r.FormValue("type"))
 	htmlContent := r.FormValue("html_content")
+
+	// Support both pre-composed name (restyle flow) and group-based name (single save).
+	group := strings.TrimSpace(r.FormValue("group"))
+	name := r.FormValue("name")
+	if group != "" {
+		name = composeTemplateName(group, tmplType)
+	}
 
 	if name == "" || htmlContent == "" {
 		writeJSON(w, http.StatusBadRequest, templateSaveResponse{Error: "Name and HTML content are required."})

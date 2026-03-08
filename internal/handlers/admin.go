@@ -822,6 +822,47 @@ type templateGroup struct {
 	AllActive bool // true when every template in the group is active
 }
 
+// templateNamePrefix extracts the group prefix from a template name.
+// Splits on " — " (em dash) or " - " (hyphen). Returns the full name if no separator found.
+func templateNamePrefix(name string) string {
+	if idx := strings.Index(name, " \u2014 "); idx > 0 {
+		return name[:idx]
+	}
+	if idx := strings.Index(name, " - "); idx > 0 {
+		return name[:idx]
+	}
+	return name
+}
+
+// templateNameSuffix extracts the part after the separator (e.g., "Header" from "Theme — Header").
+// Returns the full name if no separator found.
+func templateNameSuffix(name string) string {
+	if idx := strings.Index(name, " \u2014 "); idx > 0 {
+		return name[idx+len(" \u2014 "):]
+	}
+	if idx := strings.Index(name, " - "); idx > 0 {
+		return name[idx+len(" - "):]
+	}
+	return name
+}
+
+// composeTemplateName builds a full template name from a group prefix and template type.
+// Always uses " — " (em dash) as the separator for consistency.
+func composeTemplateName(group string, tmplType models.TemplateType) string {
+	typeLabels := map[models.TemplateType]string{
+		models.TemplateTypeHeader:      "Header",
+		models.TemplateTypeFooter:      "Footer",
+		models.TemplateTypePage:        "Page",
+		models.TemplateTypeArticleLoop: "Article Loop",
+		models.TemplateTypeAuthorPage:  "Author Page",
+	}
+	label := typeLabels[tmplType]
+	if label == "" {
+		label = string(tmplType)
+	}
+	return group + " \u2014 " + label
+}
+
 // TemplatesList renders the templates management page with real data.
 // Templates are grouped by name prefix (text before " — ") so that
 // theme sets from Restyle All appear together with bulk activation.
@@ -832,14 +873,11 @@ func (a *Admin) TemplatesList(w http.ResponseWriter, r *http.Request) {
 		slog.Error("list templates failed", "error", err)
 	}
 
-	// Group templates by prefix.
+	// Group templates by prefix (supports both " — " em dash and " - " hyphen separators).
 	var groups []templateGroup
 	groupIndex := make(map[string]int)
 	for _, t := range templates {
-		prefix := t.Name
-		if idx := strings.Index(t.Name, " \u2014 "); idx > 0 {
-			prefix = t.Name[:idx]
-		}
+		prefix := templateNamePrefix(t.Name)
 		if i, ok := groupIndex[prefix]; ok {
 			groups[i].Templates = append(groups[i].Templates, t)
 		} else {
@@ -869,18 +907,27 @@ func (a *Admin) TemplatesList(w http.ResponseWriter, r *http.Request) {
 
 // TemplateNew renders the new template form.
 func (a *Admin) TemplateNew(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+	prefixes, _ := a.templateStore.ListDistinctPrefixes(sess.TenantID)
+
 	a.renderer.Page(w, r, "template_form", &render.PageData{
 		Title:   "New Template",
 		Section: "templates",
-		Data:    map[string]any{"IsNew": true},
+		Data:    map[string]any{"IsNew": true, "Prefixes": prefixes},
 	})
 }
 
 // TemplateCreate handles the new template form submission.
 func (a *Admin) TemplateCreate(w http.ResponseWriter, r *http.Request) {
-	name := r.FormValue("name")
 	tmplType := models.TemplateType(r.FormValue("type"))
 	htmlContent := r.FormValue("html_content")
+
+	// Compose the full template name from group prefix + type label.
+	group := strings.TrimSpace(r.FormValue("group"))
+	name := strings.TrimSpace(r.FormValue("name"))
+	if group != "" {
+		name = composeTemplateName(group, tmplType)
+	}
 
 	// Validate input lengths.
 	if errMsg := validateTemplate(name, htmlContent); errMsg != "" {
@@ -962,13 +1009,24 @@ func (a *Admin) TemplateEdit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	prefixes, _ := a.templateStore.ListDistinctPrefixes(sess.TenantID)
+
+	// Only set currentGroup if the name actually has a separator.
+	// If prefix equals full name, there's no group — it's a standalone template.
+	currentGroup := ""
+	if prefix := templateNamePrefix(item.Name); prefix != item.Name {
+		currentGroup = prefix
+	}
+
 	a.renderer.Page(w, r, "template_form", &render.PageData{
 		Title:   "Edit Template",
 		Section: "templates",
 		Data: map[string]any{
-			"IsNew":     false,
-			"Item":      item,
-			"Revisions": revisions,
+			"IsNew":        false,
+			"Item":         item,
+			"Revisions":    revisions,
+			"Prefixes":     prefixes,
+			"CurrentGroup": currentGroup,
 		},
 	})
 }
@@ -993,9 +1051,15 @@ func (a *Admin) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 	oldName := item.Name
 	oldHTML := item.HTMLContent
 
-	newName := r.FormValue("name")
 	htmlContent := r.FormValue("html_content")
 	revisionMessage := strings.TrimSpace(r.FormValue("revision_message"))
+
+	// Compose the full template name from group prefix + type label.
+	group := strings.TrimSpace(r.FormValue("group"))
+	newName := strings.TrimSpace(r.FormValue("name"))
+	if group != "" {
+		newName = composeTemplateName(group, item.Type)
+	}
 
 	// Validate syntax.
 	if err := a.engine.ValidateTemplate(htmlContent); err != nil {
@@ -1040,6 +1104,17 @@ func (a *Admin) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/admin/templates/"+item.ID.String(), http.StatusSeeOther)
+}
+
+// TemplatePrefixes returns distinct group prefixes as JSON for the group dropdown.
+func (a *Admin) TemplatePrefixes(w http.ResponseWriter, r *http.Request) {
+	sess := middleware.SessionFromCtx(r.Context())
+	prefixes, err := a.templateStore.ListDistinctPrefixes(sess.TenantID)
+	if err != nil {
+		slog.Error("list template prefixes failed", "error", err)
+		prefixes = []string{}
+	}
+	writeJSON(w, http.StatusOK, prefixes)
 }
 
 // TemplateActivate sets a template as active for its type.
