@@ -147,18 +147,27 @@ type ListData struct {
 
 // AuthorPageData holds variables available to the author page template.
 // It combines the author's profile with their published posts.
+// Includes all PageData fields (defaulting to zero values) so AI-generated
+// templates that reference common page fields don't crash at render time.
 type AuthorPageData struct {
-	SiteTitle       string
-	Slogan          string
-	Title           string // Page title — defaults to the author's display name.
-	MetaDescription string // SEO description — defaults to author bio snippet.
-	MetaKeywords    string
-	Author          *TemplateAuthor
-	Posts           []PostItem
-	Header          template.HTML
-	Footer          template.HTML
-	Year            int
-	Menus           Menus
+	SiteTitle           string
+	Slogan              string
+	Title               string // Page title — defaults to the author's display name.
+	Body                template.HTML
+	Excerpt             string
+	MetaDescription     string
+	MetaKeywords        string
+	FeaturedImageURL    string
+	FeaturedImageSrcset string
+	FeaturedImageAlt    string
+	Slug                string
+	PublishedAt         string
+	Author              *TemplateAuthor
+	Posts               []PostItem
+	Header              template.HTML
+	Footer              template.HTML
+	Year                int
+	Menus               Menus
 }
 
 // Engine compiles and renders templates from the database. It maintains
