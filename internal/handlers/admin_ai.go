@@ -1625,15 +1625,24 @@ func (a *Admin) buildRealAuthorPagePreview(tenantID uuid.UUID) any {
 		authorPosts = append(authorPosts, item)
 	}
 
+	metaDesc := ""
+	if author != nil && author.Bio != "" {
+		metaDesc = author.Bio
+		if len(metaDesc) > 160 {
+			metaDesc = metaDesc[:157] + "..."
+		}
+	}
+
 	return engine.AuthorPageData{
-		SiteTitle: "YaaiCMS",
-		Slogan:    "Your AI-powered CMS",
-		Title:     displayName,
-		Author:    author,
-		Posts:     authorPosts,
-		Header:    "<header class='bg-gray-800 text-white p-4'><nav class='max-w-6xl mx-auto flex justify-between items-center'><span class='text-xl font-bold'>YaaiCMS</span><div class='space-x-4'><a href='/' class='hover:text-gray-300'>Home</a><a href='/blog' class='hover:text-gray-300'>Blog</a></div></nav></header>",
-		Footer:    "<footer class='bg-gray-800 text-gray-400 p-6 text-center text-sm'>&copy; 2026 YaaiCMS. All rights reserved.</footer>",
-		Year:      time.Now().Year(),
+		SiteTitle:       "YaaiCMS",
+		Slogan:          "Your AI-powered CMS",
+		Title:           displayName,
+		MetaDescription: metaDesc,
+		Author:          author,
+		Posts:            authorPosts,
+		Header:          "<header class='bg-gray-800 text-white p-4'><nav class='max-w-6xl mx-auto flex justify-between items-center'><span class='text-xl font-bold'>YaaiCMS</span><div class='space-x-4'><a href='/' class='hover:text-gray-300'>Home</a><a href='/blog' class='hover:text-gray-300'>Blog</a></div></nav></header>",
+		Footer:          "<footer class='bg-gray-800 text-gray-400 p-6 text-center text-sm'>&copy; 2026 YaaiCMS. All rights reserved.</footer>",
+		Year:            time.Now().Year(),
 	}
 }
 
@@ -2007,6 +2016,12 @@ Layout:
 - {{.Year}} (int) — Current year.
 - {{.Title}} (string) — Page title, typically the author's display name. Use in <title> and as <h1>.
 
+SEO metadata (for <head>):
+- {{.MetaDescription}} (string, may be empty) — SEO description, derived from author bio.
+  Use: {{if .MetaDescription}}<meta name="description" content="{{.MetaDescription}}">{{end}}
+- {{.MetaKeywords}} (string, may be empty) — Comma-separated SEO keywords.
+  Use: {{if .MetaKeywords}}<meta name="keywords" content="{{.MetaKeywords}}">{{end}}
+
 Author profile (always present):
 - {{.Author.Name}} (string) — The author's display name.
 - {{.Author.Bio}} (string, may be empty) — Short biography or "about me" text.
@@ -2125,9 +2140,10 @@ func buildPreviewData(tmplType string) any {
 		}
 	case string(models.TemplateTypeAuthorPage):
 		return engine.AuthorPageData{
-			SiteTitle: "YaaiCMS",
-			Slogan:    "Your AI-powered CMS",
-			Title:     "Jane Doe",
+			SiteTitle:       "YaaiCMS",
+			Slogan:          "Your AI-powered CMS",
+			Title:           "Jane Doe",
+			MetaDescription: "Tech writer and open-source enthusiast sharing insights on web development, AI, and creative coding.",
 			Author: &engine.TemplateAuthor{
 				Name:      "Jane Doe",
 				Bio:       "Tech writer and open-source enthusiast. Sharing insights on modern web development, AI, and creative coding.",

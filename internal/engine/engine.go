@@ -148,15 +148,17 @@ type ListData struct {
 // AuthorPageData holds variables available to the author page template.
 // It combines the author's profile with their published posts.
 type AuthorPageData struct {
-	SiteTitle string
-	Slogan    string
-	Title     string // Page title — defaults to the author's display name.
-	Author    *TemplateAuthor
-	Posts     []PostItem
-	Header    template.HTML
-	Footer    template.HTML
-	Year      int
-	Menus     Menus
+	SiteTitle       string
+	Slogan          string
+	Title           string // Page title — defaults to the author's display name.
+	MetaDescription string // SEO description — defaults to author bio snippet.
+	MetaKeywords    string
+	Author          *TemplateAuthor
+	Posts           []PostItem
+	Header          template.HTML
+	Footer          template.HTML
+	Year            int
+	Menus           Menus
 }
 
 // Engine compiles and renders templates from the database. It maintains
@@ -420,16 +422,26 @@ func (e *Engine) RenderAuthorPage(tenantID uuid.UUID, siteTitle, slogan string, 
 		}
 	}
 
+	// Derive SEO meta description from author bio (truncate to ~160 chars).
+	metaDesc := ""
+	if author != nil && author.Bio != "" {
+		metaDesc = author.Bio
+		if len(metaDesc) > 160 {
+			metaDesc = metaDesc[:157] + "..."
+		}
+	}
+
 	data := AuthorPageData{
-		SiteTitle: siteTitle,
-		Slogan:    slogan,
-		Title:     author.Name,
-		Author:    author,
-		Posts:     posts,
-		Header:    template.HTML(header), //nolint:gosec // G203: header is rendered from a trusted DB template, not user input.
-		Footer:    template.HTML(footer), //nolint:gosec // G203: footer is rendered from a trusted DB template, not user input.
-		Year:      time.Now().Year(),
-		Menus:     menus,
+		SiteTitle:       siteTitle,
+		Slogan:          slogan,
+		Title:           author.Name,
+		MetaDescription: metaDesc,
+		Author:          author,
+		Posts:            posts,
+		Header:          template.HTML(header), //nolint:gosec // G203: header is rendered from a trusted DB template, not user input.
+		Footer:          template.HTML(footer), //nolint:gosec // G203: footer is rendered from a trusted DB template, not user input.
+		Year:            time.Now().Year(),
+		Menus:           menus,
 	}
 
 	rendered, err := e.compileAndRender(tmpl.ID.String(), tmpl.Version, tmpl.HTMLContent, data)
