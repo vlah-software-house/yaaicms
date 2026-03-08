@@ -29,7 +29,7 @@ func newGemini(cfg ProviderConfig) *geminiProvider {
 	}
 	return &geminiProvider{
 		config: cfg,
-		client: &http.Client{Timeout: 60 * time.Second},
+		client: &http.Client{Timeout: 120 * time.Second},
 	}
 }
 
@@ -94,6 +94,11 @@ func (p *geminiProvider) GenerateWithModel(ctx context.Context, model, systemPro
 
 	if len(result.Candidates) == 0 {
 		return "", fmt.Errorf("gemini: no candidates returned")
+	}
+
+	// Detect output truncation: "MAX_TOKENS" means the model hit the token limit.
+	if result.Candidates[0].FinishReason == "MAX_TOKENS" {
+		return "", fmt.Errorf("%w: gemini response was truncated (output exceeded token limit)", ErrOutputTruncated)
 	}
 
 	// Extract text from the first candidate's parts.
@@ -190,13 +195,19 @@ type geminiContent struct {
 	Parts []geminiPart `json:"parts"`
 }
 
+type geminiGenerationConfig struct {
+	MaxOutputTokens int `json:"maxOutputTokens,omitempty"`
+}
+
 type geminiRequest struct {
-	SystemInstruction *geminiContent  `json:"system_instruction,omitempty"`
-	Contents          []geminiContent `json:"contents"`
+	SystemInstruction *geminiContent          `json:"system_instruction,omitempty"`
+	Contents          []geminiContent         `json:"contents"`
+	GenerationConfig  *geminiGenerationConfig `json:"generationConfig,omitempty"`
 }
 
 type geminiCandidate struct {
-	Content geminiContent `json:"content"`
+	Content      geminiContent `json:"content"`
+	FinishReason string        `json:"finishReason"`
 }
 
 type geminiResponse struct {
