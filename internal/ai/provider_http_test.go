@@ -314,8 +314,8 @@ func TestClaudeGenerate_VerifiesRequestHeaders(t *testing.T) {
 	if reqBody.Model != "claude-sonnet-4-6" {
 		t.Errorf("request model: got %q, want %q", reqBody.Model, "claude-sonnet-4-6")
 	}
-	if reqBody.MaxTokens != 16384 {
-		t.Errorf("max_tokens: got %d, want %d", reqBody.MaxTokens, 16384)
+	if reqBody.MaxTokens != 64000 {
+		t.Errorf("max_tokens: got %d, want %d", reqBody.MaxTokens, 64000)
 	}
 	if reqBody.System != "system prompt" {
 		t.Errorf("system: got %q, want %q", reqBody.System, "system prompt")

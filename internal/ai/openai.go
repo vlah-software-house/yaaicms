@@ -53,9 +53,8 @@ func (p *openAIProvider) GenerateWithModel(ctx context.Context, model, systemPro
 	}
 
 	body := openAIRequest{
-		Model:     model,
-		Messages:  messages,
-		MaxTokens: 16384,
+		Model:    model,
+		Messages: messages,
 	}
 
 	return p.doChat(ctx, body)

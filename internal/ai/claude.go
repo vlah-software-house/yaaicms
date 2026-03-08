@@ -47,7 +47,7 @@ func (p *claudeProvider) GenerateWithModel(ctx context.Context, model, systemPro
 	}
 	body := claudeRequest{
 		Model:     model,
-		MaxTokens: 16384,
+		MaxTokens: 64000,
 		System:    systemPrompt,
 		Messages: []claudeMessage{
 			{Role: "user", Content: userPrompt},

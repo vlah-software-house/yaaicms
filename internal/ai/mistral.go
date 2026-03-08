@@ -50,9 +50,8 @@ func (p *mistralProvider) GenerateWithModel(ctx context.Context, model, systemPr
 	}
 
 	body := openAIRequest{
-		Model:     model,
-		Messages:  messages,
-		MaxTokens: 16384,
+		Model:    model,
+		Messages: messages,
 	}
 
 	return p.inner.doChat(ctx, body)

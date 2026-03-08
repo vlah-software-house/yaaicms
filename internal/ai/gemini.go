@@ -54,9 +54,6 @@ func (p *geminiProvider) GenerateWithModel(ctx context.Context, model, systemPro
 		Contents: []geminiContent{
 			{Parts: []geminiPart{{Text: userPrompt}}},
 		},
-		GenerationConfig: &geminiGenerationConfig{
-			MaxOutputTokens: 16384,
-		},
 	}
 
 	payload, err := json.Marshal(body)
