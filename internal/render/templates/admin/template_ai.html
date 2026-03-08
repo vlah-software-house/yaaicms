@@ -51,7 +51,7 @@
                     <div class="flex gap-2">
                         <template x-for="t in templateTypes" :key="t.value">
                             <button type="button"
-                                    @click="templateType = t.value; loadPreviewContent()"
+                                    @click="templateType = t.value; previewContentID = ''"
                                     :class="templateType === t.value
                                         ? 'bg-indigo-600 text-white border-indigo-600'
                                         : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
@@ -74,7 +74,7 @@
                         <template x-if="templateType === 'article_loop' || templateType === 'author_page'">
                             <option value="__real__">Real published posts</option>
                         </template>
-                        <template x-for="c in previewContent" :key="c.id">
+                        <template x-for="c in filteredPreviewContent()" :key="c.id">
                             <option :value="c.id" x-text="c.title + ' (' + c.type + ')'"></option>
                         </template>
                     </select>
@@ -752,10 +752,20 @@ function aiTemplateBuilder() {
             }
         },
 
+        filteredPreviewContent() {
+            if (this.templateType === 'page') {
+                return this.previewContent.filter(c => c.type === 'page');
+            }
+            if (this.templateType === 'article_loop' || this.templateType === 'author_page') {
+                return this.previewContent.filter(c => c.type === 'post');
+            }
+            return this.previewContent;
+        },
+
         getEffectiveContentID() {
             if (this.previewContentID === '__real__') {
-                const firstPost = this.previewContent.find(c => c.type === 'post');
-                return firstPost ? firstPost.id : '';
+                const firstPost = this.previewContent.filter(c => c.type === 'post');
+                return firstPost.length ? firstPost[0].id : '';
             }
             return this.previewContentID;
         },
