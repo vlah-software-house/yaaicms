@@ -200,6 +200,27 @@ func TestRequireAuth(t *testing.T) {
 		}
 	})
 
+	t.Run("sends HX-Redirect for HTMX requests when no session", func(t *testing.T) {
+		inner, called := okHandler()
+		handler := RequireAuth(inner)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/dashboard", http.NoBody)
+		req.Header.Set("HX-Request", "true")
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		if *called {
+			t.Error("next handler should NOT have been called")
+		}
+		if rr.Code != http.StatusOK {
+			t.Errorf("status: got %d, want %d (HTMX redirect uses 200)", rr.Code, http.StatusOK)
+		}
+		hxRedirect := rr.Header().Get("HX-Redirect")
+		if hxRedirect != "/admin/login" {
+			t.Errorf("HX-Redirect: got %q, want %q", hxRedirect, "/admin/login")
+		}
+	})
+
 	t.Run("redirects for any role when session is nil", func(t *testing.T) {
 		inner, _ := okHandler()
 		handler := RequireAuth(inner)
@@ -275,6 +296,28 @@ func TestRequire2FA(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("sends HX-Redirect for HTMX requests when 2FA not done", func(t *testing.T) {
+		inner, called := okHandler()
+		handler := Require2FA(inner)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/dashboard", http.NoBody)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(ctxWithSession(req.Context(), newTestSession("admin", false)))
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		if *called {
+			t.Error("next handler should NOT have been called")
+		}
+		if rr.Code != http.StatusOK {
+			t.Errorf("status: got %d, want %d (HTMX redirect uses 200)", rr.Code, http.StatusOK)
+		}
+		hxRedirect := rr.Header().Get("HX-Redirect")
+		if hxRedirect != "/admin/2fa/setup" {
+			t.Errorf("HX-Redirect: got %q, want %q", hxRedirect, "/admin/2fa/setup")
+		}
+	})
 }
 
 // ---------- RequireAdmin ----------

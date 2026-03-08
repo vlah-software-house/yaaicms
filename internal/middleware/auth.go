@@ -49,7 +49,7 @@ func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sess := SessionFromCtx(r.Context())
 		if sess == nil {
-			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+			htmxRedirect(w, r, "/admin/login")
 			return
 		}
 
@@ -64,7 +64,7 @@ func Require2FA(next http.Handler) http.Handler {
 		sess := SessionFromCtx(r.Context())
 		if sess != nil && !sess.TwoFADone {
 			// User is logged in but hasn't completed 2FA — redirect to setup.
-			http.Redirect(w, r, "/admin/2fa/setup", http.StatusSeeOther)
+			htmxRedirect(w, r, "/admin/2fa/setup")
 			return
 		}
 
@@ -105,4 +105,18 @@ func RequireSuperAdmin(next http.Handler) http.Handler {
 func SessionFromCtx(ctx context.Context) *session.Data {
 	data, _ := ctx.Value(SessionKey).(*session.Data)
 	return data
+}
+
+// htmxRedirect sends a redirect that works for both regular and HTMX
+// requests. HTMX follows standard redirects via XHR, which causes the
+// target page to load inside the hx-target element instead of navigating
+// the full page. The HX-Redirect response header tells HTMX to perform
+// a full-page navigation instead.
+func htmxRedirect(w http.ResponseWriter, r *http.Request, url string) {
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Redirect", url)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, url, http.StatusSeeOther)
 }
