@@ -116,6 +116,7 @@ func New(sessionStore *session.Store, admin *handlers.Admin, auth *handlers.Auth
 				r.Get("/", admin.TemplatesList)
 				r.Get("/ai", admin.AITemplatePage)
 				r.Get("/new", admin.TemplateNew)
+				r.Get("/prefixes", admin.TemplatePrefixes)
 				r.Post("/", admin.TemplateCreate)
 				r.Post("/preview", admin.TemplatePreview)
 				r.Get("/{id}", admin.TemplateEdit)

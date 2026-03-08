@@ -165,6 +165,39 @@ func (s *TemplateStore) Delete(tenantID, id uuid.UUID) error {
 	return nil
 }
 
+// ListDistinctPrefixes returns the distinct group prefixes for a tenant's templates.
+// Prefixes are extracted from template names by splitting on " — " (em dash) or " - " (hyphen).
+// Templates without a separator use their full name as the prefix.
+// Results are sorted alphabetically.
+func (s *TemplateStore) ListDistinctPrefixes(tenantID uuid.UUID) ([]string, error) {
+	rows, err := s.db.Query(`
+		SELECT DISTINCT
+			CASE
+				WHEN position(' — ' IN name) > 0 THEN left(name, position(' — ' IN name) - 1)
+				WHEN position(' - ' IN name) > 0 THEN left(name, position(' - ' IN name) - 1)
+				ELSE name
+			END AS prefix
+		FROM templates
+		WHERE tenant_id = $1
+		ORDER BY prefix
+	`, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("list distinct prefixes: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var prefixes []string
+	for rows.Next() {
+		var p string
+		err = rows.Scan(&p)
+		if err != nil {
+			return nil, fmt.Errorf("scan prefix: %w", err)
+		}
+		prefixes = append(prefixes, p)
+	}
+	return prefixes, rows.Err()
+}
+
 // Count returns the total number of templates for a tenant.
 func (s *TemplateStore) Count(tenantID uuid.UUID) (int, error) {
 	var count int

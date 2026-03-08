@@ -952,11 +952,19 @@ func (a *Admin) AITemplateGenerate(w http.ResponseWriter, r *http.Request) {
 // AITemplateSave saves a generated template to the database.
 // Validates the template before saving and triggers cache invalidation.
 func (a *Admin) AITemplateSave(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB limit.
+
 	sess := middleware.SessionFromCtx(r.Context())
 
-	name := r.FormValue("name")
 	tmplType := models.TemplateType(r.FormValue("type"))
 	htmlContent := r.FormValue("html_content")
+
+	// Support both pre-composed name (restyle flow) and group-based name (single save).
+	group := strings.TrimSpace(r.FormValue("group"))
+	name := r.FormValue("name")
+	if group != "" {
+		name = composeTemplateName(group, tmplType)
+	}
 
 	if name == "" || htmlContent == "" {
 		writeJSON(w, http.StatusBadRequest, templateSaveResponse{Error: "Name and HTML content are required."})

@@ -122,8 +122,12 @@
                         <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">footer</span>
                         {{else if eq (printf "%s" .Type) "page"}}
                         <span class="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">page</span>
-                        {{else}}
+                        {{else if eq (printf "%s" .Type) "article_loop"}}
                         <span class="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">article_loop</span>
+                        {{else if eq (printf "%s" .Type) "author_page"}}
+                        <span class="inline-flex items-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-800">author_page</span>
+                        {{else}}
+                        <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">{{printf "%s" .Type}}</span>
                         {{end}}
                     </td>
                     <td class="px-6 py-3 text-sm text-gray-500">v{{.Version}}</td>
