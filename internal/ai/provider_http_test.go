@@ -398,7 +398,10 @@ func TestClaudeGenerate_Truncated(t *testing.T) {
 		Content:    []claudeContentBlock{{Type: "text", Text: "<div>incomplete"}},
 		StopReason: "max_tokens",
 	}
-	body, _ := json.Marshal(resp)
+	body, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal truncated response: %v", err)
+	}
 	srv := newTestServer(t, http.StatusOK, body)
 	defer srv.Close()
 
@@ -408,7 +411,7 @@ func TestClaudeGenerate_Truncated(t *testing.T) {
 		BaseURL: srv.URL,
 	})
 
-	_, err := p.Generate(context.Background(), "sys", "usr")
+	_, err = p.Generate(context.Background(), "sys", "usr")
 	if err == nil {
 		t.Fatal("expected error for truncated response, got nil")
 	}
